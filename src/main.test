@@ -1,0 +1,34 @@
+#include <Arduino.h>
+
+#define TEST_PIN 15
+
+volatile uint32_t isrCount = 0;
+uint32_t lastPrint = 0;
+uint32_t lastCount = 0;
+
+void IRAM_ATTR onPulse() {
+    isrCount++;
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(500);
+    Serial.println("[TEST] GPIO interrupt counter starting...");
+
+    pinMode(TEST_PIN, INPUT);   // Try INPUT_PULLUP if signal is floating
+    attachInterrupt(digitalPinToInterrupt(TEST_PIN), onPulse, RISING);
+
+    Serial.printf("[TEST] Interrupt attached to GPIO %d\n", TEST_PIN);
+}
+
+void loop() {
+    if (millis() - lastPrint >= 1000) {
+        lastPrint = millis();
+        uint32_t current = isrCount;
+        uint32_t delta = current - lastCount;
+        lastCount = current;
+
+        Serial.printf("[TEST] Total: %lu  |  Last second: %lu pulses/sec\n",
+                      current, delta);
+    }
+}
