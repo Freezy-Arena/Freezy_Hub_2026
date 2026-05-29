@@ -3,11 +3,13 @@
 #include "counter/counter_manager.h"
 #include "relay/relay_manager.h"
 #include "network/network_manager.h"
+#include "webserver/web_manager.h"
 
 LedManager leds;
 CounterManager counters;
 RelayManager relays;
 EthManager network;
+WebManager      web(network);       // Pass network ref so web can read/write prefs
 
 void setup()
 {
@@ -28,6 +30,7 @@ void setup()
     relays.addChannel(0, GPIO_NUM_33);
 
     network.begin();
+    web.begin();                    // Start webserver after network is ready
 }
 
 void loop()
