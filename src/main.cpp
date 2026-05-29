@@ -4,12 +4,33 @@
 #include "relay/relay_manager.h"
 #include "network/network_manager.h"
 #include "webserver/web_manager.h"
+#include "websocket/ws_manager.h"
 
 LedManager leds;
 CounterManager counters;
 RelayManager relays;
 EthManager network;
 WebManager      web(network);       // Pass network ref so web can read/write prefs
+WsManager       ws;
+
+#define DEBUG_SERIAL false           // Set false to silence all Serial output
+bool _debugSerial = DEBUG_SERIAL;
+
+// ─── Coil callback ────────────────────────────────────────────────────────────
+// Fired by WsManager whenever a plcIoChange arrives
+
+void onCoilUpdate(const bool* coils, uint8_t count) {
+    // Example: Coil[1] TRUE → reset all counters (mirrors Python behaviour)
+    if (count > 1 && coils[1]) {
+        Serial.println("[MAIN] Coil[1] ON → resetting counters");
+        counters.resetAll();
+    }
+
+    // Example: Coil[2] drives relay 0
+    if (count > 2) {
+        relays.setState(0, coils[2]);
+    }
+}
 
 void setup()
 {
@@ -31,6 +52,10 @@ void setup()
 
     network.begin();
     web.begin();                    // Start webserver after network is ready
+
+     // Start WebSocket — prefs loaded inside begin()
+    ws.onCoilUpdate(onCoilUpdate);
+    ws.begin("192.168.10.248", 0);                // Empty = use stored prefs
 }
 
 void loop()
@@ -46,7 +71,19 @@ void loop()
 
     counters.update();
     network.update();
+    ws.update();                    // Must be called every loop
 
+    // Push counter values to arena server every 500ms
+    static uint32_t lastSend = 0;
+    if (millis() - lastSend >= 500) {
+        lastSend = millis();
+        ws.sendCounters(
+            counters.getCount(0),
+            counters.getCount(1),
+            counters.getCount(2),
+            counters.getCount(3)
+        );
+    }
     // Relay logic — on when counter 0 exceeds 10
     relays.setState(0, counters.getCount(0) > 10);
 
