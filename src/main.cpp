@@ -5,6 +5,7 @@
 #include "network/network_manager.h"
 #include "webserver/web_manager.h"
 #include "websocket/ws_manager.h"
+#include "websocket/coil_map.h"
 
 LedManager leds;
 CounterManager counters;
@@ -20,6 +21,33 @@ bool _debugSerial = DEBUG_SERIAL;
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
+
+    // Safety check — guard against shorter-than-expected coil arrays
+    auto coilActive = [&](PlcCoil c) -> bool {
+        return c < count && coils[c];
+    };
+
+    // Match reset → clear all counters
+    if (coilActive(COIL_MATCH_RESET)) {
+        Serial.println("[MAIN] Match reset → clearing counters");
+        counters.resetAll();
+    }
+
+   
+    // Relay logic
+    // hub motors
+    relays.setState(0, coilActive(COIL_RED_HUB_MOTOR));
+    relays.setState(1, coilActive(COIL_RED_HUB_MOTOR));
+    // Lights
+    if (coilActive(COIL_RED_HUB_LIGHT)){
+        leds.showSolid(CRGB::Red);
+    }else{
+        leds.showSolid(CRGB::Black);
+    }
+    // Add more logic here to react to other coils as needed}
+}
+
+void _onCoilUpdate(const bool* coils, uint8_t count) {
     // Example: Coil[1] TRUE → reset all counters (mirrors Python behaviour)
     if (count > 1 && coils[1]) {
         Serial.println("[MAIN] Coil[1] ON → resetting counters");
@@ -38,8 +66,8 @@ void setup()
     delay(500);
     Serial.println("[BOOT] Starting...");
 
-    // leds.begin();
-    // leds.showSolid(CRGB::Red);   // Startup indicator
+    leds.begin();
+    //leds.showSolid(CRGB::Red);   // Startup indicator
 
     counters.begin();
     counters.addChannel(0, GPIO_NUM_15); // Counter 1
@@ -48,7 +76,8 @@ void setup()
     counters.addChannel(3, GPIO_NUM_3);  // Counter 4
 
     relays.begin();
-    relays.addChannel(0, GPIO_NUM_33);
+    relays.addChannel(0, GPIO_NUM_33); // Horizontal hub motor relay
+    relays.addChannel(1, GPIO_NUM_34); // Vertical hub motor relay
 
     network.begin();
     web.begin();                    // Start webserver after network is ready
@@ -84,8 +113,7 @@ void loop()
             counters.getCount(3)
         );
     }
-    // Relay logic — on when counter 0 exceeds 10
-    relays.setState(0, counters.getCount(0) > 10);
+  
 
     // Print count every 2 seconds
     static uint32_t lastPrint = 0;
