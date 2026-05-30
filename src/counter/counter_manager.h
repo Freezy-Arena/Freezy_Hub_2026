@@ -15,7 +15,7 @@ struct CounterChannel {
 class CounterManager {
 public:
     void begin();
-    void update();
+    void startTask();           // Call once after all channels added
 
     void        addChannel(uint8_t ch, gpio_num_t pin);
     int64_t     getCount(uint8_t ch);
@@ -28,6 +28,7 @@ private:
     void _initUnit(uint8_t ch);
 
     static void IRAM_ATTR _pcntIsr(void* arg);
+    static void _task(void* param);         // Core 0 task function
     static int64_t _overflow[COUNTER_MAX_UNITS];
     static bool _isrInstalled;
 };

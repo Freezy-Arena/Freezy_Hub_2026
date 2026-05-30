@@ -76,14 +76,29 @@ void CounterManager::_initUnit(uint8_t ch) {
     pcnt_counter_resume(_channels[ch].unit);
 }
 
-void CounterManager::update() {
-    // Poll raw hardware counters — needed if you want smooth overflow tracking
-    // without relying solely on the ISR edge case near the limit
-    for (uint8_t i = 0; i < COUNTER_MAX_UNITS; i++) {
-        if (!_channels[i].enabled) continue;
-        int16_t raw;
-        pcnt_get_counter_value(_channels[i].unit, &raw);
-        _channels[i].lastRaw = raw;
+void CounterManager::startTask() {
+    xTaskCreatePinnedToCore(
+        _task,
+        "counter_task",
+        2048,
+        this,
+        2,          // Priority
+        nullptr,
+        0           // Core 0
+    );
+    Serial.println("[COUNTER] Task pinned to Core 0");
+}
+
+void CounterManager::_task(void* param) {
+    CounterManager* self = (CounterManager*)param;
+    while (true) {
+        for (uint8_t i = 0; i < COUNTER_MAX_UNITS; i++) {
+            if (!self->_channels[i].enabled) continue;
+            int16_t raw;
+            pcnt_get_counter_value(self->_channels[i].unit, &raw);
+            self->_channels[i].lastRaw = raw;
+        }
+        vTaskDelay(1);      // 1ms poll, yields to other Core 0 tasks
     }
 }
 

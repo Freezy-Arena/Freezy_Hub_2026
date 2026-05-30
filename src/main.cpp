@@ -68,10 +68,11 @@ void setup()
     roleManager.begin();            // Load role before anything that needs it
 
     counters.begin();
-    counters.addChannel(0, GPIO_NUM_15); // Counter 1
-    counters.addChannel(1, GPIO_NUM_1);  // Counter 2
-    counters.addChannel(2, GPIO_NUM_2);  // Counter 3
-    counters.addChannel(3, GPIO_NUM_3);  // Counter 4
+    counters.addChannel(0, GPIO_NUM_15);    // Counter 1
+    counters.addChannel(1, GPIO_NUM_1);     // Counter 2
+    counters.addChannel(2, GPIO_NUM_2);     // Counter 3
+    counters.addChannel(3, GPIO_NUM_3);     // Counter 4
+    counters.startTask();                   //must be called after all channels added
 
     relays.begin();
     relays.addChannel(0, GPIO_NUM_33); // Horizontal hub motor relay
@@ -87,7 +88,6 @@ void setup()
 
 void loop()
 {
-    counters.update();
     network.update();
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
