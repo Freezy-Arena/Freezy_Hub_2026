@@ -115,6 +115,7 @@ void loop()
             counters.getCount(3),
             roleManager.getConfig()
         );
+        ws.sendInput(true, 20); // Test single input send
     }
   
 

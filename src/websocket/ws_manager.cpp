@@ -77,16 +77,29 @@ void WsManager::sendInputs(const bool* states, uint8_t count) {
     if (!_connected) return;
 
     JsonDocument doc;
-    doc["type"] = "setInputs";     // TODO: confirm message type with arena team
+    doc["type"] = "setInput";     
     JsonArray arr = doc["data"].to<JsonArray>();
 
     for (uint8_t i = 0; i < count; i++) {
         JsonObject o = arr.add<JsonObject>();
-        o["input"]  = i;
-        o["cValue"] = states[i];
+        o["channel"]  = i;
+        o["state"] = states[i];
     }
 
-    _sendJson("setInputs", doc);
+    _sendJson("setInput", doc);
+}
+void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel version for testing
+    if (!_connected) return;
+
+    JsonDocument doc;
+    doc["type"] = "setInput";   
+    JsonArray arr = doc["data"].to<JsonArray>();
+
+    JsonObject o = arr.add<JsonObject>();
+    o["channel"]  = channel;
+    o["state"] = state;
+
+    _sendJson("setInput", doc);
 }
 
 void WsManager::sendCounters(int64_t ch0, int64_t ch1,

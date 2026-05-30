@@ -32,6 +32,7 @@ public:
 
     // Send input states 
     void sendInputs(const bool* states, uint8_t count);
+    void sendInput(const bool state, uint8_t channel); // Single channel version for testing
 
     // Send all four counter values as registers in one batch
     void sendCounters(int64_t ch0, int64_t ch1, int64_t ch2, int64_t ch3,
