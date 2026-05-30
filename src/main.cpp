@@ -6,6 +6,7 @@
 #include "webserver/web_manager.h"
 #include "websocket/ws_manager.h"
 #include "websocket/coil_map.h"
+#include "websocket/input_map.h"
 
 LedManager leds;
 CounterManager counters;
@@ -69,16 +70,18 @@ void setup()
 
     roleManager.begin();            // Load role before anything that needs it
 
+    const RoleConfig& role = roleManager.getConfig();
+
     counters.begin();
-    counters.addChannel(0, GPIO_NUM_15);    // Counter 1
-    counters.addChannel(1, GPIO_NUM_1);     // Counter 2
-    counters.addChannel(2, GPIO_NUM_2);     // Counter 3
-    counters.addChannel(3, GPIO_NUM_3);     // Counter 4
+    counters.addChannel(0, role.counterPin0);    // Counter 1
+    counters.addChannel(1, role.counterPin1);     // Counter 2
+    counters.addChannel(2, role.counterPin2);     // Counter 3
+    counters.addChannel(3, role.counterPin3);     // Counter 4
     counters.startTask();                   //must be called after all channels added
 
     relays.begin();
-    relays.addChannel(0, GPIO_NUM_33); // Horizontal hub motor relay
-    relays.addChannel(1, GPIO_NUM_34); // Vertical hub motor relay
+    relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
+    relays.addChannel(1, role.relayLight); // Vertical hub motor relay
 
     network.begin();
     web.begin();                    // Start webserver after network is ready
@@ -98,6 +101,9 @@ void loop()
     static uint32_t lastInputSend = 0;
     if (millis() - lastInputSend >= 500) {
         lastInputSend = millis();
+        const RoleConfig& role = roleManager.getConfig();
+        bool state = digitalRead(role.counterPin0);  // Same pin as counter channel 0
+        ws.sendInput(state, role.plcInputSensor1); // Map to role-specific input index
         // TODO: populate from actual GPIO reads once role pin mapping is added
         // must add setInputs endpoint in Arena server to use this data
         // bool inputs[INPUT_COUNT] = {};
@@ -115,7 +121,7 @@ void loop()
             counters.getCount(3),
             roleManager.getConfig()
         );
-        ws.sendInput(true, 20); // Test single input send
+        
     }
   
 

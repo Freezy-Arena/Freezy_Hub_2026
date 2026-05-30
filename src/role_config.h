@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include "websocket/coil_map.h"
 #include "websocket/register_map.h"
+#include "websocket/input_map.h"
 
 #define ROLE_PREFS_NS "role"
 
@@ -26,6 +27,22 @@ struct RoleConfig {
     // Coils this role cares about
     uint8_t     coilMotor;
     uint8_t     coilLight;
+
+    // PLC Mapping inputs this role cares about (for future use)
+    uint8_t     plcInputSensor1;
+    uint8_t     plcInputSensor2;
+    uint8_t     plcInputSensor3;
+    uint8_t     plcInputSensor4;
+
+     // Counter GPIO pins
+    gpio_num_t  counterPin0;
+    gpio_num_t  counterPin1;
+    gpio_num_t  counterPin2;
+    gpio_num_t  counterPin3;
+
+    // Relay GPIO pins
+    gpio_num_t  relayMotor;
+    gpio_num_t  relayLight;
 };
 
 // ─── Role definitions ─────────────────────────────────────────────────────────
@@ -40,7 +57,13 @@ static const RoleConfig ROLE_CONFIGS[] = {
         REG_RED_HUB_COUNT_4,
         REG_RED_HUB_TOTAL,            // Total register (Reg 1 = sum of 3,4,5,6)
         COIL_RED_HUB_MOTOR,
-        COIL_RED_HUB_LIGHT
+        COIL_RED_HUB_LIGHT,
+        INPUT_RED_HUB_SENSOR_1,
+        INPUT_RED_HUB_SENSOR_2, 
+        INPUT_RED_HUB_SENSOR_3,
+        INPUT_RED_HUB_SENSOR_4,
+        GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3,    // Counter pins
+        GPIO_NUM_33, GPIO_NUM_34                             // Relay pins
     },
     {
         ROLE_BLUE_HUB, "blueHub",
@@ -50,7 +73,14 @@ static const RoleConfig ROLE_CONFIGS[] = {
         REG_BLUE_HUB_COUNT_4,
         REG_BLUE_HUB_TOTAL,           // Total register (Reg 2 = sum of 7,8,9,10)
         COIL_BLUE_HUB_MOTOR,
-        COIL_BLUE_HUB_LIGHT
+        COIL_BLUE_HUB_LIGHT,
+        INPUT_BLUE_HUB_SENSOR_1,
+        INPUT_BLUE_HUB_SENSOR_2,
+        INPUT_BLUE_HUB_SENSOR_3,
+        INPUT_BLUE_HUB_SENSOR_4,
+        GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3,    // Counter pins
+        GPIO_NUM_33, GPIO_NUM_34                             // Relay pins
+
     }
 };
 

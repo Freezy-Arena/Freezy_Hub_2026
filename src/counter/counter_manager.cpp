@@ -40,6 +40,7 @@ void CounterManager::addChannel(uint8_t ch, gpio_num_t pin) {
 }
 
 void CounterManager::_initUnit(uint8_t ch) {
+    pinMode(_channels[ch].pin, INPUT); // Ensure pin is readable as GPIO
     pcnt_config_t cfg = {
         .pulse_gpio_num = _channels[ch].pin,
         .ctrl_gpio_num  = PCNT_PIN_NOT_USED,
