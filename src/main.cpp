@@ -51,6 +51,8 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
         } else if (role.role == ROLE_BLUE_HUB) {
             leds.showSolid(CRGB::Blue);
         }
+    } else if (coilActive(COIL_FIELD_RESET_LIGHT)) { // Only turn off if not also active for motor
+        leds.showSolid(CRGB::Green);
     } else {
         leds.showSolid(CRGB::Black);
     }
