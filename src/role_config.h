@@ -29,16 +29,12 @@ struct RoleConfig {
     uint8_t     coilLight;
 
     // PLC Mapping inputs this role cares about (for future use)
-    uint8_t     plcInputSensor1;
-    uint8_t     plcInputSensor2;
-    uint8_t     plcInputSensor3;
-    uint8_t     plcInputSensor4;
+    uint8_t     plcInputSensor[4];
+ 
 
      // Counter GPIO pins
-    gpio_num_t  counterPin0;
-    gpio_num_t  counterPin1;
-    gpio_num_t  counterPin2;
-    gpio_num_t  counterPin3;
+    gpio_num_t  counterPin[4];
+  
 
     // Relay GPIO pins
     gpio_num_t  relayMotor;
@@ -58,12 +54,12 @@ static const RoleConfig ROLE_CONFIGS[] = {
         REG_RED_HUB_TOTAL,            // Total register (Reg 1 = sum of 3,4,5,6)
         COIL_RED_HUB_MOTOR,
         COIL_RED_HUB_LIGHT,
-        INPUT_RED_HUB_SENSOR_1,
+        {INPUT_RED_HUB_SENSOR_1,
         INPUT_RED_HUB_SENSOR_2, 
         INPUT_RED_HUB_SENSOR_3,
-        INPUT_RED_HUB_SENSOR_4,
-        GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3,    // Counter pins
-        GPIO_NUM_33, GPIO_NUM_34                             // Relay pins
+        INPUT_RED_HUB_SENSOR_4},
+        {GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3},    // Counter pins
+        GPIO_NUM_33, GPIO_NUM_34                            // Relay pins
     },
     {
         ROLE_BLUE_HUB, "blueHub",
@@ -74,11 +70,11 @@ static const RoleConfig ROLE_CONFIGS[] = {
         REG_BLUE_HUB_TOTAL,           // Total register (Reg 2 = sum of 7,8,9,10)
         COIL_BLUE_HUB_MOTOR,
         COIL_BLUE_HUB_LIGHT,
-        INPUT_BLUE_HUB_SENSOR_1,
+        {INPUT_BLUE_HUB_SENSOR_1,
         INPUT_BLUE_HUB_SENSOR_2,
         INPUT_BLUE_HUB_SENSOR_3,
-        INPUT_BLUE_HUB_SENSOR_4,
-        GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3,    // Counter pins
+        INPUT_BLUE_HUB_SENSOR_4},
+        {GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3},    // Counter pins
         GPIO_NUM_33, GPIO_NUM_34                             // Relay pins
 
     }

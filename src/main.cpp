@@ -73,10 +73,9 @@ void setup()
     const RoleConfig& role = roleManager.getConfig();
 
     counters.begin();
-    counters.addChannel(0, role.counterPin0);    // Counter 1
-    counters.addChannel(1, role.counterPin1);     // Counter 2
-    counters.addChannel(2, role.counterPin2);     // Counter 3
-    counters.addChannel(3, role.counterPin3);     // Counter 4
+    for (uint8_t i = 0; i < 4; i++) {
+        counters.addChannel(i, role.counterPin[i]);
+    }
     counters.startTask();                   //must be called after all channels added
 
     relays.begin();
@@ -102,12 +101,12 @@ void loop()
     if (millis() - lastInputSend >= 500) {
         lastInputSend = millis();
         const RoleConfig& role = roleManager.getConfig();
-        bool state = digitalRead(role.counterPin0);  // Same pin as counter channel 0
-        ws.sendInput(state, role.plcInputSensor1); // Map to role-specific input index
-        // TODO: populate from actual GPIO reads once role pin mapping is added
-        // must add setInputs endpoint in Arena server to use this data
-        // bool inputs[INPUT_COUNT] = {};
-        // ws.sendInputs(inputs, INPUT_COUNT);
+        bool state = digitalRead(role.counterPin[0]);  // Same pin as counter channel 0
+        ws.sendInput(state, role.plcInputSensor[0]); // Map to role-specific input index
+        // TODO: loop trhough all role-specific inputs and send as batch
+        // create a list of couterpins to interate through
+
+        
     }
 
     // Push counter values to arena server every 500ms
