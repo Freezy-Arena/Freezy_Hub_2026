@@ -1,7 +1,7 @@
 #include "web_manager.h"
 
-WebManager::WebManager(EthManager& eth)
-    : _server(80), _eth(eth) {}
+WebManager::WebManager(EthManager& eth, RoleManager& role)
+    : _server(80), _eth(eth), _role(role) {}
 
 void WebManager::begin() {
     _setupRoutes();
@@ -284,63 +284,21 @@ String WebManager::_buildPage(const String& message) {
       </div>
 
       <hr class="divider">
+      <h2>Device Role</h2>
+      <div class="field">
+        <label>Role</label>
+        <select name="role" style="width:100%;padding:10px 14px;background:#12151f;border:1px solid #2d3148;border-radius:8px;color:#e2e8f0;font-size:0.95rem;">
+          <option value="redHub" )"
+    + String(_role.getRoleName() == "redHub"  ? "selected" : "") + R"(>Red Hub</option>
+          <option value="blueHub" )"
+    + String(_role.getRoleName() == "blueHub" ? "selected" : "") + R"(>Blue Hub</option>
+        </select>
+      </div>
+
+      <hr class="divider">
       <button type="submit">Save &amp; Reboot</button>
     </form>
   </div>
-</body>
-</html>)";
-
-    return html;
-}
-
-String WebManager::_buildPageSimple(const String& message) {
-    String ip      = _eth.staticIP;
-    String gw      = _eth.staticGW;
-    bool   isDHCP  = _eth.useDHCP;
-
-    String html = R"(<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Device Configuration</title>
-</head>
-<body>
-  <h2>Device Configuration</h2>
-  <hr>)";
-
-    // Status message
-    if (message.length()) {
-        html += "<p><strong>" + message + "</strong></p><hr>";
-    }
-
-    // Current status block
-    html += R"(
-  <h3>Current Network Status</h3>
-  <table>
-    <tr><td>IP Address</td><td>)" + _eth.localIPString() + R"(</td></tr>
-    <tr><td>Mode</td><td>)" + String(isDHCP ? "DHCP" : "Static") + R"(</td></tr>
-  </table>
-  <hr>
-  <h3>Network Settings</h3>
-  <form method="POST" action="/save">
-
-    <label>
-      <input type="checkbox" name="useDHCP" value="1" )"
-    + String(isDHCP ? "checked" : "") +
-    R"(> Use DHCP
-    </label><br><br>
-
-    <label>Static IP Address<br>
-      <input type="text" name="staticIP" value=")" + ip + R"(" size="20">
-    </label><br><br>
-
-    <label>Gateway<br>
-      <input type="text" name="staticGW" value=")" + gw + R"(" size="20">
-    </label><br><br>
-
-    <input type="submit" value="Save &amp; Reboot">
-  </form>
 </body>
 </html>)";
 
@@ -379,12 +337,27 @@ void WebManager::_setupRoutes() {
             }
         }
 
+        if (req->hasParam("role", true)){
+          _role.setRoleByName(req->getParam("role", true)->value());
+        }
+        
         _eth.savePreferences();
-        message = "Settings saved. Rebooting...";
-        req->send(200, "text/html", _buildPage(message));
+        String rebootPage = R"(<!DOCTYPE html>
+        <html><head>
+        <meta charset="UTF-8">
+        <meta http-equiv="refresh" content="5;url=/">
+        <title>Rebooting</title>
+        </head><body style="background:#0f1117;color:#e2e8f0;font-family:sans-serif;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+        <div style="text-align:center;">
+          <h2 style="color:#86efac;">Settings Saved</h2>
+          <p style="color:#94a3b8;">Device is rebooting — reconnecting in 5 seconds...</p>
+        </div>
+        </body></html>)";
 
-        delay(1500);
-        ESP.restart();
+        req->send(200, "text/html", rebootPage);
+        delay(1000);
+        //ESP.restart();
     });
 
     // 404

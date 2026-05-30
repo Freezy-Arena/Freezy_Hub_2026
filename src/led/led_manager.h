@@ -4,7 +4,7 @@
 #define LED_PIN     38
 #define NUM_LEDS    100
 #define LED_TYPE    WS2812B
-#define COLOR_ORDER GRB
+#define COLOR_ORDER BRG
 
 class LedManager {
 public:

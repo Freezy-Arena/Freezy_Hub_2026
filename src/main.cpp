@@ -11,7 +11,8 @@ LedManager leds;
 CounterManager counters;
 RelayManager relays;
 EthManager network;
-WebManager      web(network);       // Pass network ref so web can read/write prefs
+RoleManager     roleManager;
+WebManager      web(network, roleManager);       // Pass network ref so web can read/write prefs
 WsManager       ws;
 
 #define DEBUG_SERIAL false           // Set false to silence all Serial output
@@ -21,9 +22,10 @@ bool _debugSerial = DEBUG_SERIAL;
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
+    const RoleConfig& role = roleManager.getConfig();
 
     // Safety check — guard against shorter-than-expected coil arrays
-    auto coilActive = [&](PlcCoil c) -> bool {
+    auto coilActive = [&](uint8_t c) -> bool {
         return c < count && coils[c];
     };
 
@@ -33,30 +35,24 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
         counters.resetAll();
     }
 
-   
-    // Relay logic
-    // hub motors
-    relays.setState(0, coilActive(COIL_RED_HUB_MOTOR));
-    relays.setState(1, coilActive(COIL_RED_HUB_MOTOR));
-    // Lights
-    if (coilActive(COIL_RED_HUB_LIGHT)){
-        leds.showSolid(CRGB::Red);
-    }else{
+   // Role-specific relay and LED logic
+    if (coilActive(role.coilMotor)) {
+        relays.setState(0, true);
+        relays.setState(1, true);
+    } else {
+        relays.setState(0, false);
+        relays.setState(1, false);
+    }
+
+    if (coilActive(role.coilLight)) {
+        // Color per role
+        if (role.role == ROLE_RED_HUB) {
+            leds.showSolid(CRGB::Red);
+        } else if (role.role == ROLE_BLUE_HUB) {
+            leds.showSolid(CRGB::Blue);
+        }
+    } else {
         leds.showSolid(CRGB::Black);
-    }
-    // Add more logic here to react to other coils as needed}
-}
-
-void _onCoilUpdate(const bool* coils, uint8_t count) {
-    // Example: Coil[1] TRUE → reset all counters (mirrors Python behaviour)
-    if (count > 1 && coils[1]) {
-        Serial.println("[MAIN] Coil[1] ON → resetting counters");
-        counters.resetAll();
-    }
-
-    // Example: Coil[2] drives relay 0
-    if (count > 2) {
-        relays.setState(0, coils[2]);
     }
 }
 
@@ -68,6 +64,8 @@ void setup()
 
     leds.begin();
     //leds.showSolid(CRGB::Red);   // Startup indicator
+
+    roleManager.begin();            // Load role before anything that needs it
 
     counters.begin();
     counters.addChannel(0, GPIO_NUM_15); // Counter 1
@@ -110,19 +108,21 @@ void loop()
             counters.getCount(0),
             counters.getCount(1),
             counters.getCount(2),
-            counters.getCount(3)
+            counters.getCount(3),
+            roleManager.getConfig()
         );
     }
   
 
     // Print count every 2 seconds
     static uint32_t lastPrint = 0;
-    if (millis() - lastPrint >= 2000)
-    {
+    if (millis() - lastPrint >= 2000) {
         lastPrint = millis();
-        Serial.printf("[COUNTER] Ch0: %lld\n", counters.getCount(0));
-        Serial.printf("[COUNTER] Ch1: %lld\n", counters.getCount(1));
-        Serial.printf("[COUNTER] Ch2: %lld\n", counters.getCount(2));
-        Serial.printf("[COUNTER] Ch3: %lld\n", counters.getCount(3));
+        Serial.printf("[STATUS] Role:%s  Ch0:%lld Ch1:%lld Ch2:%lld Ch3:%lld | Relay:%s | WS:%s\n",
+                      roleManager.getRoleName().c_str(),
+                      counters.getCount(0), counters.getCount(1),
+                      counters.getCount(2), counters.getCount(3),
+                      relays.getState(0) ? "ON"  : "OFF",
+                      ws.isConnected()   ? "UP"  : "DOWN");
     }
 }

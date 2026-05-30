@@ -74,29 +74,27 @@ void WsManager::_sendJson(const String& type, JsonDocument& doc) {
 }
 
 void WsManager::sendCounters(int64_t ch0, int64_t ch1,
-                              int64_t ch2, int64_t ch3) {
+                              int64_t ch2, int64_t ch3,
+                              const RoleConfig& role) {
     if (!_connected) return;
 
-    int64_t total1 = ch0 + ch1 + ch2 + ch3;
+    int64_t total = ch0 + ch1 + ch2 + ch3;
 
-    // Build:  {"type":"setRegisters","data":[{"register":N,"cValue":V},...]}
     JsonDocument doc;
     doc["type"] = "setRegisters";
     JsonArray arr = doc["data"].to<JsonArray>();
 
-    // Individual counter registers (mirrors Python KEY_REGISTER_MAP)
-    auto addReg = [&](int reg, int64_t val) {
+    auto addReg = [&](uint8_t reg, int64_t val) {
         JsonObject o = arr.add<JsonObject>();
         o["register"] = reg;
-        o["cValue"]   = (long)val;     // ArduinoJson handles long cleanly
+        o["cValue"]   = (long)val;
     };
 
-    addReg(3,  ch0);
-    addReg(4,  ch1);
-    addReg(5,  ch2);
-    addReg(6,  ch3);
-    addReg(1,  total1);   // Group A total — Reg 1
-    addReg(2,  0);        // Group B reserved — Reg 2
+    addReg(role.regCh0,   ch0);
+    addReg(role.regCh1,   ch1);
+    addReg(role.regCh2,   ch2);
+    addReg(role.regCh3,   ch3);
+    addReg(role.regTotal, total);
 
     _sendJson("setRegisters", doc);
 }

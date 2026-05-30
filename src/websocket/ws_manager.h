@@ -3,6 +3,7 @@
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include "../role_config.h"
 
 // Mirrors the Python register map
 // Counter channel → PLC register
@@ -30,7 +31,8 @@ public:
     bool isConnected();
 
     // Send all four counter values as registers in one batch
-    void sendCounters(int64_t ch0, int64_t ch1, int64_t ch2, int64_t ch3);
+    void sendCounters(int64_t ch0, int64_t ch1, int64_t ch2, int64_t ch3,
+                  const RoleConfig& role);
 
     // Register a callback for incoming coil updates
     void onCoilUpdate(CoilCallback cb);
