@@ -153,15 +153,23 @@ void WsManager::_handleMessage(const String& raw) {
     String type = doc["type"].as<String>();
     JsonObject data = doc["data"].as<JsonObject>();
 
+    // === Print the full raw JSON (recommended) ===
+    WS_LOG("[WS] ← Received JSON:");
+    if (_debugSerial){
+        serializeJsonPretty(doc, Serial);  // Pretty print
+    }
+    WS_LOG(" ");  // Extra newline for readability
+
     if (type == "plcIoChange") {
         _handleCoilChange(data);
     } else if (type == "plcRegisterSetSuccess") {
+        WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
     } else if (type == "error") {
         Serial.printf("[WS] ← Server error: %s\n",
                       doc["data"].as<String>().c_str());
     } else {
-        Serial.printf("[WS] ← Unhandled type: %s\n", type.c_str());
+        WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
     }
 }
 
