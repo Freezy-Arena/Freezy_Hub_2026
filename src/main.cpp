@@ -87,18 +87,10 @@ void setup()
 
 void loop()
 {
-    // leds.showChase(CRGB::Green);   // Swap in any pattern to test
-    // leds.showRainbow();
-    /* leds.showSolid(CRGB::Blue);
-    delay(1000);
-    leds.showSolid(CRGB::Green);
-    delay(1000);
-    leds.showSolid(CRGB::Red);
-    delay(1000); */
-
     counters.update();
     network.update();
     ws.update();                    // Must be called every loop
+    web.update();               // Handles pending reboot
 
     // Send input states every 500ms
     static uint32_t lastInputSend = 0;

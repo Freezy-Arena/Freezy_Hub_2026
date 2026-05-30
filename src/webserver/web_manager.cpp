@@ -356,12 +356,21 @@ void WebManager::_setupRoutes() {
         </body></html>)";
 
         req->send(200, "text/html", rebootPage);
-        delay(1000);
-        //ESP.restart();
+        _rebootPending  = true;
+        _rebootAt       = millis() + 3000;  // Reboot 3s from now, non-blocking
     });
 
     // 404
     _server.onNotFound([](AsyncWebServerRequest* req) {
         req->send(404, "text/plain", "Not found");
     });
+
+}
+
+void WebManager::update() {
+    if (_rebootPending && millis() >= _rebootAt) {
+        _rebootPending = false;
+        Serial.println("[WEB] Rebooting now...");
+        ESP.restart();
+    }
 }
