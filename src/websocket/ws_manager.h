@@ -30,6 +30,9 @@ public:
 
     bool isConnected();
 
+    // Send input states 
+    void sendInputs(const bool* states, uint8_t count);
+
     // Send all four counter values as registers in one batch
     void sendCounters(int64_t ch0, int64_t ch1, int64_t ch2, int64_t ch3,
                   const RoleConfig& role);

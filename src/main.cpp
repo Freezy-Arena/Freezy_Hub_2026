@@ -100,6 +100,16 @@ void loop()
     network.update();
     ws.update();                    // Must be called every loop
 
+    // Send input states every 500ms
+    static uint32_t lastInputSend = 0;
+    if (millis() - lastInputSend >= 500) {
+        lastInputSend = millis();
+        // TODO: populate from actual GPIO reads once role pin mapping is added
+        // must add setInputs endpoint in Arena server to use this data
+        // bool inputs[INPUT_COUNT] = {};
+        // ws.sendInputs(inputs, INPUT_COUNT);
+    }
+
     // Push counter values to arena server every 500ms
     static uint32_t lastSend = 0;
     if (millis() - lastSend >= 500) {

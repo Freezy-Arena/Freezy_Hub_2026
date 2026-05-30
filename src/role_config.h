@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include "websocket/coil_map.h"
+#include "websocket/register_map.h"
 
 #define ROLE_PREFS_NS "role"
 
@@ -33,15 +34,21 @@ struct RoleConfig {
 static const RoleConfig ROLE_CONFIGS[] = {
     {
         ROLE_RED_HUB,  "redHub",
-        3, 4, 5, 6,    // Registers for Ch0–Ch3
-        1,             // Total register (Reg 1 = sum of 3,4,5,6)
+        REG_RED_HUB_COUNT_1,
+        REG_RED_HUB_COUNT_2,
+        REG_RED_HUB_COUNT_3,
+        REG_RED_HUB_COUNT_4,
+        REG_RED_HUB_TOTAL,            // Total register (Reg 1 = sum of 3,4,5,6)
         COIL_RED_HUB_MOTOR,
         COIL_RED_HUB_LIGHT
     },
     {
         ROLE_BLUE_HUB, "blueHub",
-        7, 8, 9, 10,   // Registers for Ch0–Ch3
-        2,             // Total register (Reg 2 = sum of 7,8,9,10)
+        REG_BLUE_HUB_COUNT_1,
+        REG_BLUE_HUB_COUNT_2,
+        REG_BLUE_HUB_COUNT_3,
+        REG_BLUE_HUB_COUNT_4,
+        REG_BLUE_HUB_TOTAL,           // Total register (Reg 2 = sum of 7,8,9,10)
         COIL_BLUE_HUB_MOTOR,
         COIL_BLUE_HUB_LIGHT
     }
