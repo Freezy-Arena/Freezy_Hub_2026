@@ -14,6 +14,16 @@ void LedManager::update() {
     // Called from main loop
 }
 
+void LedManager::setLedRaw(uint16_t index, CRGB color) {
+    if (index < NUM_LEDS) {
+        _leds[index] = color;
+    }
+}
+
+void LedManager::show() {
+    FastLED.show();
+}
+
 void LedManager::setAll(CRGB color) {
     fill_solid(_leds, NUM_LEDS, color);
     FastLED.show();

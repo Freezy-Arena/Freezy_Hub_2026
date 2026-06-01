@@ -174,10 +174,18 @@ void WsManager::_handleMessage(const String& raw) {
     WS_LOG(" ");  // Extra newline for readability
 
     if (type == "plcIoChange") {
+        Serial.printf("[WS] ← plcIoChange received\n");
         _handleCoilChange(data);
+    } else if (type == "arenaStatus") {
+        Serial.printf("[WS] ← arenaStatus received\n");
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
+    } else if (type == "setLedMode") {
+        Serial.printf("[WS] ← setLedMode: %s\n", type.c_str());
+        serializeJsonPretty(doc, Serial);  // Pretty print
+    } else if (type == "ping") {
+        Serial.printf("[WS] ← Ping received");
     } else if (type == "error") {
         Serial.printf("[WS] ← Server error: %s\n",
                       doc["data"].as<String>().c_str());
