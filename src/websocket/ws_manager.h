@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include "../role_config.h"
+#include "../led_animator/led_animator.h"
 
 // Mirrors the Python register map
 // Counter channel → PLC register
@@ -23,11 +24,16 @@ extern bool _debugSerial;
 // coils: pointer to bool array, count: number of coils
 typedef void (*CoilCallback)(const bool* coils, uint8_t count);
 
+typedef void (*LedModeCallback)(LedMode redMode, LedMode blueMode);
+
+
 class WsManager {
 public:
     void begin(const String& host, uint16_t port, const String& path = "/api/plc/websocket");
     void update();                          // Call from loop()
 
+    void onLedMode(LedModeCallback cb);
+    
     bool isConnected();
 
     // Send input states 
@@ -58,4 +64,6 @@ private:
     void _handleMessage(const String& raw);
     void _handleCoilChange(JsonObject data);
     void _sendJson(const String& type, JsonDocument& data);
+    LedModeCallback _ledModeCb = nullptr;
+    void _handleLedMode(JsonObject data);
 };

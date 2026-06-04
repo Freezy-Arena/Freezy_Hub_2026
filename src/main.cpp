@@ -8,6 +8,7 @@
 #include "websocket/coil_map.h"
 #include "websocket/input_map.h"
 #include "dmx_led/dmx_led_manager.h"
+#include "led_animator/led_animator.h"
 
 LedManager leds;
 CounterManager counters;
@@ -17,6 +18,7 @@ RoleManager     roleManager;
 WebManager      web(network, roleManager);       // Pass network ref so web can read/write prefs
 WsManager       ws;
 DmxLedManager   dmxLed(leds, roleManager);
+LedAnimator ledAnim(leds, roleManager);
 
 #define DEBUG_SERIAL false           // Set false to silence all Serial output
 bool _debugSerial = DEBUG_SERIAL;
@@ -49,7 +51,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 
     // ── LED logic — skipped if DMX is active ─────────────────────────────────
     if (dmxLed.isReceiving()) return;
-    
+    return; // The LED are currently contoled by the DMX WebSocket messages, so ignore coil changes for now
     if (coilActive(role.coilLight)) {
         // Color per role
         if (role.role == ROLE_RED_HUB) {
@@ -64,6 +66,10 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
     }
 }
 
+void onLedModeUpdate(LedMode redMode, LedMode blueMode) {
+    ledAnim.setMode(redMode, blueMode);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -71,6 +77,7 @@ void setup()
     Serial.println("[BOOT] Starting...");
 
     roleManager.begin();            // Load role before anything that needs it
+    ledAnim.begin();
 
     const RoleConfig& role = roleManager.getConfig();
 
@@ -89,6 +96,7 @@ void setup()
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
+    ws.onLedMode(onLedModeUpdate);
     ws.begin("192.168.10.248", 0);                // Empty = use stored prefs
 
     leds.begin();
@@ -101,6 +109,10 @@ void loop()
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
     dmxLed.update();
+    // Only run animator if DMX is not active
+    if (!dmxLed.isReceiving()) {
+        ledAnim.update();
+    }
 
     // Send input states every 500ms
     static uint32_t lastInputSend = 0;

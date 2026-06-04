@@ -184,6 +184,7 @@ void WsManager::_handleMessage(const String& raw) {
     } else if (type == "setLedMode") {
         Serial.printf("[WS] ← setLedMode: %s\n", type.c_str());
         serializeJsonPretty(doc, Serial);  // Pretty print
+        _handleLedMode(data);
     } else if (type == "ping") {
         Serial.printf("[WS] ← Ping received");
     } else if (type == "error") {
@@ -220,4 +221,16 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
         default:
             break;
     }
+    
+}
+
+void WsManager::onLedMode(LedModeCallback cb) {
+    _ledModeCb = cb;
+}
+
+void WsManager::_handleLedMode(JsonObject data) {
+    LedMode redMode  = (LedMode)data["RedMode"].as<uint8_t>();
+    LedMode blueMode = (LedMode)data["BlueMode"].as<uint8_t>();
+    WS_LOG("[WS] ← setLedMode red=%d blue=%d\n", redMode, blueMode);
+    if (_ledModeCb) _ledModeCb(redMode, blueMode);
 }
