@@ -49,9 +49,9 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
         relays.setState(1, false);
     }
 
-    // ── LED logic — skipped if DMX is active ─────────────────────────────────
-    if (dmxLed.isReceiving()) return;
-    return; // The LED are currently contoled by the DMX WebSocket messages, so ignore coil changes for now
+    // LED only in coil mode
+    if (network.ledControlMode != LED_CONTROL_COIL) return;
+
     if (coilActive(role.coilLight)) {
         // Color per role
         if (role.role == ROLE_RED_HUB) {
@@ -67,7 +67,9 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 }
 
 void onLedModeUpdate(LedMode redMode, LedMode blueMode) {
-    ledAnim.setMode(redMode, blueMode);
+     if (network.ledControlMode == LED_CONTROL_WEBSOCKET) {
+        ledAnim.setMode(redMode, blueMode);
+    }
 }
 
 void setup()
@@ -108,11 +110,20 @@ void loop()
     network.update();
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
-    dmxLed.update();
-    // Only run animator if DMX is not active
-    if (!dmxLed.isReceiving()) {
+
+    LedControlMode ledMode = network.ledControlMode;
+
+    // DMX direct — handled by dmxLed.update()
+    if (ledMode == LED_CONTROL_DMX) {
+        dmxLed.update();
+    }
+    // WebSocket LED mode — run animator
+    if (ledMode == LED_CONTROL_WEBSOCKET) {
         ledAnim.update();
     }
+
+    // Coil mode — handled in onCoilUpdate
+    // Only pass coil LED updates through if in coil mode
 
     // Send input states every 500ms
     static uint32_t lastInputSend = 0;

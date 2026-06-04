@@ -15,6 +15,7 @@ String WebManager::_buildPage(const String& message) {
     String ip     = _eth.staticIP;
     String gw     = _eth.staticGW;
     bool  isDHCP  = _eth.useDHCP;
+    uint8_t ledMode = (uint8_t)_eth.ledControlMode;
 
     String html = R"(<!DOCTYPE html>
 <html lang="en">
@@ -24,7 +25,6 @@ String WebManager::_buildPage(const String& message) {
   <title>Device Configuration</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #0f1117;
@@ -35,7 +35,6 @@ String WebManager::_buildPage(const String& message) {
       justify-content: center;
       padding: 40px 16px;
     }
-
     .card {
       background: #1a1d27;
       border: 1px solid #2d3148;
@@ -44,30 +43,20 @@ String WebManager::_buildPage(const String& message) {
       width: 100%;
       max-width: 480px;
     }
-
     .header {
       display: flex;
       align-items: center;
       gap: 12px;
       margin-bottom: 28px;
     }
-
     .dot {
-      width: 10px;
-      height: 10px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       background: #22c55e;
       box-shadow: 0 0 8px #22c55e;
       flex-shrink: 0;
     }
-
-    h1 {
-      font-size: 1.2rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      color: #f1f5f9;
-    }
-
+    h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.02em; color: #f1f5f9; }
     .status-block {
       background: #12151f;
       border: 1px solid #2d3148;
@@ -76,61 +65,15 @@ String WebManager::_buildPage(const String& message) {
       margin-bottom: 28px;
       font-size: 0.85rem;
     }
-
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      color: #94a3b8;
-    }
-
-    .status-row span:last-child {
-      color: #e2e8f0;
-      font-family: monospace;
-      font-size: 0.9rem;
-    }
-
-    .message {
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
-
-    .message.error {
-      background: #2d1515;
-      border: 1px solid #7f1d1d;
-      color: #fca5a5;
-    }
-
-    .message.success {
-      background: #14281e;
-      border: 1px solid #14532d;
-      color: #86efac;
-    }
-
-    h2 {
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #64748b;
-      margin-bottom: 18px;
-    }
-
-    .field {
-      margin-bottom: 18px;
-    }
-
-    label {
-      display: block;
-      font-size: 0.85rem;
-      color: #94a3b8;
-      margin-bottom: 6px;
-    }
-
-    input[type="text"] {
+    .status-row { display: flex; justify-content: space-between; padding: 4px 0; color: #94a3b8; }
+    .status-row span:last-child { color: #e2e8f0; font-family: monospace; font-size: 0.9rem; }
+    .message { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.875rem; font-weight: 500; }
+    .message.error  { background: #2d1515; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .message.success { background: #14281e; border: 1px solid #14532d; color: #86efac; }
+    h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 18px; }
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; }
+    input[type="text"], select {
       width: 100%;
       padding: 10px 14px;
       background: #12151f;
@@ -142,16 +85,8 @@ String WebManager::_buildPage(const String& message) {
       transition: border-color 0.2s;
       outline: none;
     }
-
-    input[type="text"]:focus {
-      border-color: #6366f1;
-    }
-
-    input[type="text"]:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
+    input[type="text"]:focus, select:focus { border-color: #6366f1; }
+    input[type="text"]:disabled { opacity: 0.4; cursor: not-allowed; }
     .toggle-row {
       display: flex;
       align-items: center;
@@ -162,65 +97,27 @@ String WebManager::_buildPage(const String& message) {
       padding: 12px 16px;
       margin-bottom: 18px;
     }
-
-    .toggle-label {
-      font-size: 0.9rem;
-      color: #e2e8f0;
-    }
-
-    .toggle-label small {
-      display: block;
-      font-size: 0.78rem;
-      color: #64748b;
-      margin-top: 2px;
-    }
-
-    /* Custom toggle switch */
+    .toggle-label { font-size: 0.9rem; color: #e2e8f0; }
+    .toggle-label small { display: block; font-size: 0.78rem; color: #64748b; margin-top: 2px; }
     .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; inset: 0;
-      background: #2d3148;
-      border-radius: 24px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .slider::before {
-      content: '';
-      position: absolute;
-      width: 18px; height: 18px;
-      left: 3px; bottom: 3px;
-      background: #94a3b8;
-      border-radius: 50%;
-      transition: transform 0.2s, background 0.2s;
-    }
+    .slider { position: absolute; inset: 0; background: #2d3148; border-radius: 24px; cursor: pointer; transition: background 0.2s; }
+    .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #94a3b8; border-radius: 50%; transition: transform 0.2s, background 0.2s; }
     input:checked + .slider { background: #6366f1; }
     input:checked + .slider::before { transform: translateX(20px); background: #fff; }
-
-    .divider {
-      border: none;
-      border-top: 1px solid #2d3148;
-      margin: 24px 0;
-    }
-
+    .divider { border: none; border-top: 1px solid #2d3148; margin: 24px 0; }
     button[type="submit"] {
-      width: 100%;
-      padding: 12px;
-      background: #6366f1;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-weight: 600;
+      width: 100%; padding: 12px;
+      background: #6366f1; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600;
       cursor: pointer;
       transition: background 0.2s, opacity 0.2s;
       letter-spacing: 0.02em;
     }
-
     button[type="submit"]:hover { background: #4f46e5; }
     button[type="submit"]:active { opacity: 0.8; }
   </style>
-
   <script>
     function toggleStatic(checked) {
       var fields = document.querySelectorAll('.static-field');
@@ -238,7 +135,6 @@ String WebManager::_buildPage(const String& message) {
 </head>
 <body>
   <div class="card">
-
     <div class="header">
       <div class="dot"></div>
       <h1>Device Configuration</h1>
@@ -254,8 +150,10 @@ String WebManager::_buildPage(const String& message) {
     // Status block
     html += R"(
     <div class="status-block">
-      <div class="status-row"><span>IP Address</span><span>)" + _eth.localIPString() + R"(</span></div>
-      <div class="status-row"><span>Mode</span><span>)" + String(isDHCP ? "DHCP" : "Static") + R"(</span></div>
+      <div class="status-row"><span>IP Address</span><span>)"
+    + _eth.localIPString() + R"(</span></div>
+      <div class="status-row"><span>Mode</span><span>)"
+    + String(isDHCP ? "DHCP" : "Static") + R"(</span></div>
     </div>
 
     <h2>Network Settings</h2>
@@ -287,11 +185,22 @@ String WebManager::_buildPage(const String& message) {
       <h2>Device Role</h2>
       <div class="field">
         <label>Role</label>
-        <select name="role" style="width:100%;padding:10px 14px;background:#12151f;border:1px solid #2d3148;border-radius:8px;color:#e2e8f0;font-size:0.95rem;">
+        <select name="role">
           <option value="redHub" )"
     + String(_role.getRoleName() == "redHub"  ? "selected" : "") + R"(>Red Hub</option>
           <option value="blueHub" )"
     + String(_role.getRoleName() == "blueHub" ? "selected" : "") + R"(>Blue Hub</option>
+        </select>
+      </div>
+
+      <hr class="divider">
+      <h2>LED Control</h2>
+      <div class="field">
+        <label>Control Mode</label>
+        <select name="ledControl">
+          <option value="0" )" + String(ledMode == 0 ? "selected" : "") + R"(>Coil</option>
+          <option value="1" )" + String(ledMode == 1 ? "selected" : "") + R"(>DMX Direct</option>
+          <option value="2" )" + String(ledMode == 2 ? "selected" : "") + R"(>DMX WebSocket</option>
         </select>
       </div>
 
@@ -316,7 +225,6 @@ void WebManager::_setupRoutes() {
 
     // POST /save — save and reboot
     _server.on("/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
-        String message = "";
 
         // DHCP checkbox — only present in POST if checked
         _eth.useDHCP = req->hasParam("useDHCP", true);
@@ -337,11 +245,21 @@ void WebManager::_setupRoutes() {
             }
         }
 
-        if (req->hasParam("role", true)){
-          _role.setRoleByName(req->getParam("role", true)->value());
+        // Role
+        if (req->hasParam("role", true)) {
+            _role.setRoleByName(req->getParam("role", true)->value());
+            _role.savePreferences();
         }
-        
+
+        // LED control mode
+        if (req->hasParam("ledControl", true)) {
+            uint8_t mode = req->getParam("ledControl", true)->value().toInt();
+            Serial.printf("[WEB] LED control mode: %d\n", mode);
+            _eth.ledControlMode = (LedControlMode)mode;
+        }
+
         _eth.savePreferences();
+
         String rebootPage = R"(<!DOCTYPE html>
         <html><head>
         <meta charset="UTF-8">
@@ -357,7 +275,7 @@ void WebManager::_setupRoutes() {
 
         req->send(200, "text/html", rebootPage);
         _rebootPending  = true;
-        _rebootAt       = millis() + 3000;  // Reboot 3s from now, non-blocking
+        _rebootAt       = millis() + 3000;
     });
 
     // 404

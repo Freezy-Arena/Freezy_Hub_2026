@@ -12,6 +12,12 @@ enum DeviceRole : uint8_t {
     ROLE_BLUE_HUB = 1
 };
 
+enum LedControlMode : uint8_t {
+    LED_CONTROL_COIL        = 0,
+    LED_CONTROL_DMX         = 1,
+    LED_CONTROL_WEBSOCKET   = 2
+};
+
 // Register assignments per role
 struct RoleConfig {
     DeviceRole  role;
