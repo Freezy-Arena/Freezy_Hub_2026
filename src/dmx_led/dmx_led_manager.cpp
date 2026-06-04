@@ -5,18 +5,45 @@ DmxLedManager::DmxLedManager(LedManager& leds, RoleManager& role)
 
 void DmxLedManager::begin() {
     _udp.begin(SACN_PORT);
-    Serial.printf("[DMX] Listening on UDP port %d universe %d\n",
-                  SACN_PORT, SACN_UNIVERSE);
+    Serial.printf("[DMX] Listening on UDP port %d universes %d and %d\n",
+                  SACN_PORT, SACN_UNIVERSE_RED, SACN_UNIVERSE_BLUE);
 }
 
 void DmxLedManager::update() {
     int size = _udp.parsePacket();
     if (size > 0) {
-        size = _udp.read(_packet, SACN_MAX_PACKET_SIZE);
-        if (_validatePacket(size)) {
-            _processPixels(size);
-            _lastPacket = millis();
-            _receiving  = true;
+        // Peek at universe before deciding which buffer to read into
+        uint8_t peek[115];
+        _udp.read(peek, 115);
+        int universe = (peek[113] << 8) | peek[114];
+
+        // Re-read full packet into correct buffer
+        // Note: We already consumed 115 bytes so read remaining into temp
+        // Instead read entire packet fresh — use a temp buffer first
+        // Actually WiFiUDP doesn't support re-reading, so read into temp then copy
+        static uint8_t temp[SACN_MAX_PACKET_SIZE];
+        memcpy(temp, peek, 115);
+        int remaining = size - 115;
+        if (remaining > 0) {
+            _udp.read(temp + 115, remaining);
+        }
+
+        if (universe == SACN_UNIVERSE_RED) {
+            if (_validatePacket(temp, size, SACN_UNIVERSE_RED, _lastSeqRed)) {
+                memcpy(_packetRed, temp, size);
+                _srcPixelsRed = (size - SACN_PIXEL_DATA_OFFSET) / 3;
+                _lastPacket   = millis();
+                _receiving    = true;
+                _renderPixels();
+            }
+        } else if (universe == SACN_UNIVERSE_BLUE) {
+            if (_validatePacket(temp, size, SACN_UNIVERSE_BLUE, _lastSeqBlue)) {
+                memcpy(_packetBlue, temp, size);
+                _srcPixelsBlue = (size - SACN_PIXEL_DATA_OFFSET) / 3;
+                _lastPacket    = millis();
+                _receiving     = true;
+                _renderPixels();
+            }
         }
     }
 
@@ -30,9 +57,10 @@ bool DmxLedManager::isReceiving() {
     return _receiving;
 }
 
-bool DmxLedManager::_validatePacket(int size) {
+bool DmxLedManager::_validatePacket(uint8_t* packet, int size,
+                                     int expectedUniverse, uint8_t& lastSeq) {
     if (size < SACN_PIXEL_DATA_OFFSET) {
-        Serial.printf("[DMX] Packet too small: %d bytes\n", size);
+        Serial.printf("[DMX] Packet too small: %d\n", size);
         return false;
     }
 
@@ -41,51 +69,57 @@ bool DmxLedManager::_validatePacket(int size) {
         0x31, 0x37, 0x00, 0x00, 0x00
     };
     for (int i = 0; i < 12; i++) {
-        if (_packet[4 + i] != acnId[i]) {
+        if (packet[4 + i] != acnId[i]) {
             Serial.println("[DMX] Invalid ACN identifier");
             return false;
         }
     }
 
-    int universe = (_packet[113] << 8) | _packet[114];
-    if (universe != SACN_UNIVERSE) {
-        return false;
-    }
+    int universe = (packet[113] << 8) | packet[114];
+    if (universe != expectedUniverse) return false;
 
-    uint8_t seq = _packet[111];
-    if (seq != 0 && seq <= _lastSequence && (_lastSequence - seq) < 128) {
-        Serial.printf("[DMX] Out of order packet seq=%d last=%d\n",
-                      seq, _lastSequence);
+    uint8_t seq = packet[111];
+    if (seq != 0 && seq <= lastSeq && (lastSeq - seq) < 128) {
+        Serial.printf("[DMX] Out of order seq=%d last=%d\n", seq, lastSeq);
         return false;
     }
-    _lastSequence = seq;
+    lastSeq = seq;
 
     return true;
 }
 
-void DmxLedManager::_processPixels(int size) {
-    const uint8_t* pixelData = _packet + SACN_PIXEL_DATA_OFFSET;
-    int pixelBytes           = size - SACN_PIXEL_DATA_OFFSET;
-    int numPixels            = pixelBytes / 3;
+void DmxLedManager::_renderPixels() {
+    // Red universe fills first half of strip
+    // Blue universe fills second half of strip
+    int halfStrip = NUM_LEDS / 2;
 
-    Serial.printf("[DMX] Packet size: %d  pixelBytes: %d  numPixels: %d\n",
-                  size, pixelBytes, numPixels);
-                  
-    int endPixel = min(numPixels, NUM_LEDS);
-
-    if (_role.getRole() == ROLE_BLUE_HUB) {
-        int offset   = (numPixels / 2) * 3;
-        pixelData   += offset;
-        pixelBytes  -= offset;
-        numPixels    = pixelBytes / 3;
-        endPixel     = min(numPixels, NUM_LEDS);
+    // Red — scale srcPixelsRed into pixels 0 to halfStrip-1
+    if (_srcPixelsRed > 0) {
+        const uint8_t* pixelData = _packetRed + SACN_PIXEL_DATA_OFFSET;
+        for (int i = 0; i < halfStrip; i++) {
+            int srcIndex = constrain((i * _srcPixelsRed) / halfStrip,
+                                     0, _srcPixelsRed - 1);
+            _leds.setLedRaw(i, CRGB(
+                pixelData[srcIndex * 3 + 0],
+                pixelData[srcIndex * 3 + 1],
+                pixelData[srcIndex * 3 + 2]
+            ));
+        }
     }
 
-    for (int i = 0; i < endPixel; i++) {
-        uint8_t r = pixelData[i * 3 + 0];
-        uint8_t g = pixelData[i * 3 + 1];
-        uint8_t b = pixelData[i * 3 + 2];
-        _leds.setLedRaw(i, CRGB(r, g, b));
+    // Blue — scale srcPixelsBlue into pixels halfStrip to NUM_LEDS-1
+    if (_srcPixelsBlue > 0) {
+        const uint8_t* pixelData = _packetBlue + SACN_PIXEL_DATA_OFFSET;
+        for (int i = 0; i < halfStrip; i++) {
+            int srcIndex = constrain((i * _srcPixelsBlue) / halfStrip,
+                                     0, _srcPixelsBlue - 1);
+            _leds.setLedRaw(halfStrip + i, CRGB(
+                pixelData[srcIndex * 3 + 0],
+                pixelData[srcIndex * 3 + 1],
+                pixelData[srcIndex * 3 + 2]
+            ));
+        }
     }
+
     _leds.show();
 }
