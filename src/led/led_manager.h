@@ -10,6 +10,8 @@ class LedManager {
 public:
     void begin();
     void update();
+    void setLedRaw(uint16_t index, CRGB color);  // Set without calling show()
+    void show();  
 
     // Basic controls
     void setAll(CRGB color);

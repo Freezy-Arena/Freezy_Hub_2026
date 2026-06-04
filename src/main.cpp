@@ -7,6 +7,8 @@
 #include "websocket/ws_manager.h"
 #include "websocket/coil_map.h"
 #include "websocket/input_map.h"
+#include "dmx_led/dmx_led_manager.h"
+#include "led_animator/led_animator.h"
 
 LedManager leds;
 CounterManager counters;
@@ -15,6 +17,8 @@ EthManager network;
 RoleManager     roleManager;
 WebManager      web(network, roleManager);       // Pass network ref so web can read/write prefs
 WsManager       ws;
+DmxLedManager   dmxLed(leds, roleManager);
+LedAnimator ledAnim(leds, roleManager);
 
 #define DEBUG_SERIAL false           // Set false to silence all Serial output
 bool _debugSerial = DEBUG_SERIAL;
@@ -45,6 +49,9 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
         relays.setState(1, false);
     }
 
+    // LED only in coil mode
+    if (network.ledControlMode != LED_CONTROL_COIL) return;
+
     if (coilActive(role.coilLight)) {
         // Color per role
         if (role.role == ROLE_RED_HUB) {
@@ -59,16 +66,20 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
     }
 }
 
+void onLedModeUpdate(LedMode redMode, LedMode blueMode) {
+     if (network.ledControlMode == LED_CONTROL_WEBSOCKET) {
+        ledAnim.setMode(redMode, blueMode);
+    }
+}
+
 void setup()
 {
     Serial.begin(115200);
     delay(500);
     Serial.println("[BOOT] Starting...");
 
-    leds.begin();
-    //leds.showSolid(CRGB::Red);   // Startup indicator
-
     roleManager.begin();            // Load role before anything that needs it
+    ledAnim.begin();
 
     const RoleConfig& role = roleManager.getConfig();
 
@@ -87,7 +98,11 @@ void setup()
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
+    ws.onLedMode(onLedModeUpdate);
     ws.begin("192.168.10.248", 0);                // Empty = use stored prefs
+
+    leds.begin();
+    dmxLed.begin();
 }
 
 void loop()
@@ -95,6 +110,20 @@ void loop()
     network.update();
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
+
+    LedControlMode ledMode = network.ledControlMode;
+
+    // DMX direct — handled by dmxLed.update()
+    if (ledMode == LED_CONTROL_DMX) {
+        dmxLed.update();
+    }
+    // WebSocket LED mode — run animator
+    if (ledMode == LED_CONTROL_WEBSOCKET) {
+        ledAnim.update();
+    }
+
+    // Coil mode — handled in onCoilUpdate
+    // Only pass coil LED updates through if in coil mode
 
     // Send input states every 500ms
     static uint32_t lastInputSend = 0;

@@ -3,6 +3,7 @@
 #include <ETH.h>
 #include <Network.h>
 #include <Preferences.h>
+#include "../role_config.h"
 
 // W5500 SPI pins
 #define ETH_PHY_TYPE ETH_PHY_W5500
@@ -37,6 +38,7 @@ public:
     bool useDHCP = true;
     String staticIP = NET_DEFAULT_IP;
     String staticGW = NET_DEFAULT_GW;
+    LedControlMode  ledControlMode  = LED_CONTROL_COIL;
 
     // Preferences — stubbed and ready to expand
     void loadPreferences();

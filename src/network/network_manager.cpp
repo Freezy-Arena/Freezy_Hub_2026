@@ -43,6 +43,7 @@ void EthManager::loadPreferences()
     useDHCP = _prefs.getBool("useDHCP", true);
     staticIP = _prefs.getString("staticIP", NET_DEFAULT_IP);
     staticGW = _prefs.getString("staticGW", NET_DEFAULT_GW);
+    ledControlMode  = (LedControlMode)_prefs.getUChar("ledControl", LED_CONTROL_COIL);
     _prefs.end();
     Serial.printf("[NET] Prefs loaded — DHCP: %s  IP: %s\n",
                   useDHCP ? "yes" : "no", staticIP.c_str());
@@ -54,6 +55,7 @@ void EthManager::savePreferences()
     _prefs.putBool("useDHCP", useDHCP);
     _prefs.putString("staticIP", staticIP);
     _prefs.putString("staticGW", staticGW);
+    _prefs.putUChar("ledControl",   (uint8_t)ledControlMode);
     _prefs.end();
     Serial.println("[NET] Prefs saved");
 }
