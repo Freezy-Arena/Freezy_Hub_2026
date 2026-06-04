@@ -145,11 +145,11 @@ void WsManager::_handleCoilChange(JsonObject data) {
     }
 
     // Print all coil states
-    Serial.printf("[WS] Coils(%d):", count);
+    WS_LOG("[WS] Coils(%d):", count);
     for (uint8_t i = 0; i < count; i++) {
-        Serial.printf("  [%d]=%s", i, coils[i] ? "ON" : "OFF");
+        WS_LOG("  [%d]=%s", i, coils[i] ? "ON" : "OFF");
     }
-    Serial.println();
+    WS_LOG(" ");
 
     // Fire registered callback
     if (_coilCb) _coilCb(coils, count);
@@ -174,10 +174,10 @@ void WsManager::_handleMessage(const String& raw) {
     WS_LOG(" ");  // Extra newline for readability
 
     if (type == "plcIoChange") {
-        Serial.printf("[WS] ← plcIoChange received\n");
+        WS_LOG("[WS] ← plcIoChange received\n");
         _handleCoilChange(data);
     } else if (type == "arenaStatus") {
-        Serial.printf("[WS] ← arenaStatus received\n");
+        WS_LOG("[WS] ← arenaStatus received\n");
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
