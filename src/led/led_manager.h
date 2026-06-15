@@ -2,7 +2,9 @@
 #include <FastLED.h>
 
 #define LED_PIN     38
-#define NUM_LEDS    100
+#define LED_STRIPS  2
+#define LEDs_PER_STRIP 125
+#define NUM_LEDS    (LED_STRIPS * LEDs_PER_STRIP)
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER BRG
 

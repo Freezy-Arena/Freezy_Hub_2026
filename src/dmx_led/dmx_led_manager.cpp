@@ -91,7 +91,8 @@ bool DmxLedManager::_validatePacket(uint8_t* packet, int size,
 void DmxLedManager::_renderPixels() {
     // Red universe fills first half of strip
     // Blue universe fills second half of strip
-    int halfStrip = NUM_LEDS / 2;
+    // Cheesy now uses a single Universe
+    int halfStrip = NUM_LEDS;
 
     // Red — scale srcPixelsRed into pixels 0 to halfStrip-1
     if (_srcPixelsRed > 0) {
