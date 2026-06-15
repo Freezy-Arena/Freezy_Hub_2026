@@ -92,7 +92,7 @@ void DmxLedManager::_renderPixels() {
     // Red universe fills first half of strip
     // Blue universe fills second half of strip
     // Cheesy now uses a single Universe
-    int halfStrip = NUM_LEDS;
+    int halfStrip = _leds.getLedCount();
 
     // Red — scale srcPixelsRed into pixels 0 to halfStrip-1
     if (_srcPixelsRed > 0) {
@@ -108,7 +108,7 @@ void DmxLedManager::_renderPixels() {
         }
     }
 
-    // Blue — scale srcPixelsBlue into pixels halfStrip to NUM_LEDS-1
+    // Blue — scale srcPixelsBlue into pixels after the red range when available
     if (_srcPixelsBlue > 0) {
         const uint8_t* pixelData = _packetBlue + SACN_PIXEL_DATA_OFFSET;
         for (int i = 0; i < halfStrip; i++) {

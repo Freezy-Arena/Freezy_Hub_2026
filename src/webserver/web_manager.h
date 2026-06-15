@@ -3,10 +3,11 @@
 #include <ESPAsyncWebServer.h>
 #include "../network/network_manager.h"
 #include "../role_config.h"
+#include "../led/led_manager.h"
 
 class WebManager {
 public:
-    WebManager(EthManager& eth, RoleManager& role);
+    WebManager(EthManager& eth, RoleManager& role, LedManager& leds);
     void begin();
     void update();
 
@@ -14,6 +15,7 @@ private:
     AsyncWebServer  _server;
     EthManager&     _eth;
     RoleManager&    _role;
+    LedManager&     _leds;
 
     bool        _rebootPending  = false;
     uint32_t    _rebootAt       = 0;

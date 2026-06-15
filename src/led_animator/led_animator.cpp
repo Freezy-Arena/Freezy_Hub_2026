@@ -10,7 +10,7 @@
 #define NUM_SIDES           4
 #define FIXTURES_PER_SIDE   2
 #define NODES_PER_FIXTURE   8
-// numPixels = 4 * 2 * 8 = 64 source pixels, scaled to NUM_LEDS
+// numPixels = 4 * 2 * 8 = 64 source pixels, scaled to active LED count
 
 // Startup side delays — mirrors strip.go
 #define STARTUP_SIDE1_DELAY     0
@@ -95,7 +95,8 @@ void LedAnimator::_renderPulse(CRGB color) {
 
 void LedAnimator::_renderStartup(CRGB color) {
     // Clear all first
-    for (int i = 0; i < NUM_LEDS; i++) {
+    uint16_t ledCount = _leds.getLedCount();
+    for (int i = 0; i < ledCount; i++) {
         _leds.setLedRaw(i, CRGB::Black);
     }
 
@@ -120,13 +121,14 @@ void LedAnimator::_fillSide(int side, CRGB color, int counter, int direction) {
     if (pct > 1.0f) pct = 1.0f;
 
     for (int fixture = 0; fixture < FIXTURES_PER_SIDE; fixture++) {
-        // Map source fixture to output LED range scaled to NUM_LEDS
+        // Map source fixture to output LED range scaled to active LED count
         int srcStart = (side * FIXTURES_PER_SIDE + fixture) * NODES_PER_FIXTURE;
         int srcTotal = NUM_SIDES * FIXTURES_PER_SIDE * NODES_PER_FIXTURE; // 64
+        uint16_t ledCount = _leds.getLedCount();
 
         // Scale source position to output strip
-        int outStart = (srcStart * NUM_LEDS) / srcTotal;
-        int outEnd   = ((srcStart + NODES_PER_FIXTURE) * NUM_LEDS) / srcTotal;
+        int outStart = (srcStart * ledCount) / srcTotal;
+        int outEnd   = ((srcStart + NODES_PER_FIXTURE) * ledCount) / srcTotal;
         int outCount = outEnd - outStart;
 
         _fillFixture(outStart, color, pct, direction, outCount);
@@ -184,7 +186,8 @@ void LedAnimator::_fillFixture(int startLed, CRGB color, float percentage,
 
 void LedAnimator::_renderAdvantage(CRGB color) {
     // Fill base color first
-    for (int i = 0; i < NUM_LEDS; i++) {
+    uint16_t ledCount = _leds.getLedCount();
+    for (int i = 0; i < ledCount; i++) {
         _leds.setLedRaw(i, color);
     }
 
@@ -196,8 +199,8 @@ void LedAnimator::_renderAdvantage(CRGB color) {
 
         for (int fixture = 0; fixture < FIXTURES_PER_SIDE; fixture++) {
             int srcStart = (side * FIXTURES_PER_SIDE + fixture) * NODES_PER_FIXTURE;
-            int outStart = (srcStart * NUM_LEDS) / srcTotal;
-            int outEnd   = ((srcStart + NODES_PER_FIXTURE) * NUM_LEDS) / srcTotal;
+            int outStart = (srcStart * ledCount) / srcTotal;
+            int outEnd   = ((srcStart + NODES_PER_FIXTURE) * ledCount) / srcTotal;
             int outCount = outEnd - outStart;
 
             _sweepFixture(outStart, _counter, direction, outCount);

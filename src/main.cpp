@@ -15,7 +15,7 @@ CounterManager counters;
 RelayManager relays;
 EthManager network;
 RoleManager     roleManager;
-WebManager      web(network, roleManager);       // Pass network ref so web can read/write prefs
+WebManager      web(network, roleManager, leds);       // Pass managers so web can read/write prefs
 WsManager       ws;
 DmxLedManager   dmxLed(leds, roleManager);
 LedAnimator ledAnim(leds, roleManager);
@@ -93,6 +93,8 @@ void setup()
     relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
     relays.addChannel(1, role.relayLight); // Vertical hub motor relay
 
+    leds.begin();
+
     network.begin();
     web.begin();                    // Start webserver after network is ready
 
@@ -101,7 +103,6 @@ void setup()
     ws.onLedMode(onLedModeUpdate);
     ws.begin("192.168.10.248", 0);                // Empty = use stored prefs
 
-    leds.begin();
     dmxLed.begin();
 }
 

@@ -1,7 +1,7 @@
 #include "web_manager.h"
 
-WebManager::WebManager(EthManager& eth, RoleManager& role)
-    : _server(80), _eth(eth), _role(role) {}
+WebManager::WebManager(EthManager& eth, RoleManager& role, LedManager& leds)
+    : _server(80), _eth(eth), _role(role), _leds(leds) {}
 
 void WebManager::begin() {
     _setupRoutes();
@@ -16,6 +16,8 @@ String WebManager::_buildPage(const String& message) {
     String gw     = _eth.staticGW;
     bool  isDHCP  = _eth.useDHCP;
     uint8_t ledMode = (uint8_t)_eth.ledControlMode;
+    uint16_t ledCount = _leds.getLedCount();
+    uint16_t maxLedCount = _leds.getMaxLedCount();
 
     String html = R"(<!DOCTYPE html>
 <html lang="en">
@@ -73,7 +75,7 @@ String WebManager::_buildPage(const String& message) {
     h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 18px; }
     .field { margin-bottom: 18px; }
     label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; }
-    input[type="text"], select {
+    input[type="text"], input[type="number"], select {
       width: 100%;
       padding: 10px 14px;
       background: #12151f;
@@ -85,7 +87,7 @@ String WebManager::_buildPage(const String& message) {
       transition: border-color 0.2s;
       outline: none;
     }
-    input[type="text"]:focus, select:focus { border-color: #6366f1; }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #6366f1; }
     input[type="text"]:disabled { opacity: 0.4; cursor: not-allowed; }
     .toggle-row {
       display: flex;
@@ -199,9 +201,13 @@ String WebManager::_buildPage(const String& message) {
         <label>Control Mode</label>
         <select name="ledControl">
           <option value="0" )" + String(ledMode == 0 ? "selected" : "") + R"(>Coil</option>
-          <option value="1" )" + String(ledMode == 1 ? "selected" : "") + R"(>DMX Direct</option>
-          <option value="2" )" + String(ledMode == 2 ? "selected" : "") + R"(>DMX WebSocket</option>
+          <option value="1" )" + String(ledMode == 1 ? "selected" : "") + R"(>DMX Direct (Single Universe)</option>
+          <option value="2" )" + String(ledMode == 2 ? "selected" : "") + R"(>DMX WebSocket (Hub role)</option>
         </select>
+      </div>
+      <div class="field">
+        <label>Number of LEDs</label>
+        <input type="number" name="ledCount" value=")" + String(ledCount) + R"(" min="1" max=")" + String(maxLedCount) + R"(" step="1">
       </div>
 
       <hr class="divider">
@@ -256,6 +262,21 @@ void WebManager::_setupRoutes() {
             uint8_t mode = req->getParam("ledControl", true)->value().toInt();
             Serial.printf("[WEB] LED control mode: %d\n", mode);
             _eth.ledControlMode = (LedControlMode)mode;
+        }
+
+        // LED count
+        if (req->hasParam("ledCount", true)) {
+            int count = req->getParam("ledCount", true)->value().toInt();
+            if (count < 1 || count > _leds.getMaxLedCount()) {
+                req->send(200, "text/html",
+                          _buildPage(String("ERROR: LED count must be between 1 and ")
+                                     + String(_leds.getMaxLedCount()) + "."));
+                return;
+            }
+
+            _leds.setLedCount((uint16_t)count);
+            _leds.savePreferences();
+            Serial.printf("[WEB] LED count: %d\n", count);
         }
 
         _eth.savePreferences();
