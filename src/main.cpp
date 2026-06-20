@@ -101,7 +101,7 @@ void setup()
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
     ws.onLedMode(onLedModeUpdate);
-    ws.begin("192.168.10.248", 0);                // Empty = use stored prefs
+    ws.begin("192.168.10.106", 0);                // Empty = use stored prefs
 
     dmxLed.begin();
 }

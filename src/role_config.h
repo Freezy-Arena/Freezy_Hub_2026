@@ -65,7 +65,7 @@ static const RoleConfig ROLE_CONFIGS[] = {
         INPUT_RED_HUB_SENSOR_3,
         INPUT_RED_HUB_SENSOR_4},
         {GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3},    // Counter pins
-        GPIO_NUM_33, GPIO_NUM_34                            // Relay pins
+        GPIO_NUM_34, GPIO_NUM_35                            // Relay pins
     },
     {
         ROLE_BLUE_HUB, "blueHub",
@@ -81,7 +81,7 @@ static const RoleConfig ROLE_CONFIGS[] = {
         INPUT_BLUE_HUB_SENSOR_3,
         INPUT_BLUE_HUB_SENSOR_4},
         {GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3},    // Counter pins
-        GPIO_NUM_33, GPIO_NUM_34                             // Relay pins
+        GPIO_NUM_34, GPIO_NUM_35                             // Relay pins
 
     }
 };
