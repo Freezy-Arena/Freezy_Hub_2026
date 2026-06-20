@@ -1,7 +1,7 @@
 #include "web_manager.h"
 
-WebManager::WebManager(EthManager& eth, RoleManager& role, LedManager& leds)
-    : _server(80), _eth(eth), _role(role), _leds(leds) {}
+WebManager::WebManager(EthManager& eth, RoleManager& role, LedManager& leds, WsManager& ws)
+    : _server(80), _eth(eth), _role(role), _leds(leds), _ws(ws) {}
 
 void WebManager::begin() {
     _setupRoutes();
@@ -18,6 +18,7 @@ String WebManager::_buildPage(const String& message) {
     uint8_t ledMode = (uint8_t)_eth.ledControlMode;
     uint16_t ledCount = _leds.getLedCount();
     uint16_t maxLedCount = _leds.getMaxLedCount();
+    String wsHost = _ws.arenaHost;
 
     String html = R"(<!DOCTYPE html>
 <html lang="en">
@@ -184,6 +185,13 @@ String WebManager::_buildPage(const String& message) {
       </div>
 
       <hr class="divider">
+      <h2>WebSocket Settings</h2>
+      <div class="field">
+        <label>WebSocket Server IP</label>
+        <input type="text" name="wsHost" value=")" + wsHost + R"(" placeholder="10.0.100.5">
+      </div>
+
+      <hr class="divider">
       <h2>Device Role</h2>
       <div class="field">
         <label>Role</label>
@@ -249,6 +257,23 @@ void WebManager::_setupRoutes() {
                           _buildPage("ERROR: Invalid IP or Gateway — not saved."));
                 return;
             }
+        }
+
+        // WebSocket server IP
+        if (req->hasParam("wsHost", true)) {
+            String wsHost = req->getParam("wsHost", true)->value();
+            wsHost.trim();
+
+            IPAddress testWsHost;
+            if (!testWsHost.fromString(wsHost)) {
+                req->send(200, "text/html",
+                          _buildPage("ERROR: Invalid WebSocket Server IP — not saved."));
+                return;
+            }
+
+            _ws.arenaHost = wsHost;
+            _ws.savePreferences();
+            Serial.printf("[WEB] WebSocket server IP: %s\n", wsHost.c_str());
         }
 
         // Role

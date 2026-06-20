@@ -15,8 +15,8 @@ CounterManager counters;
 RelayManager relays;
 EthManager network;
 RoleManager     roleManager;
-WebManager      web(network, roleManager, leds);       // Pass managers so web can read/write prefs
 WsManager       ws;
+WebManager      web(network, roleManager, leds, ws);       // Pass managers so web can read/write prefs
 DmxLedManager   dmxLed(leds, roleManager);
 LedAnimator ledAnim(leds, roleManager);
 
@@ -101,7 +101,7 @@ void setup()
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
     ws.onLedMode(onLedModeUpdate);
-    ws.begin("192.168.10.106", 0);                // Empty = use stored prefs
+    ws.begin("", 0);                // Empty = use stored prefs
 
     dmxLed.begin();
 }

@@ -48,7 +48,7 @@ public:
     void onCoilUpdate(CoilCallback cb);
 
     // Preferences — ready for webserver config later
-    String  arenaHost = "192.168.10.248";//"10.0.100.5";
+    String  arenaHost = "10.0.100.5";
     uint16_t arenaPort = 8080;
     void loadPreferences();
     void savePreferences();
