@@ -120,6 +120,14 @@ String WebManager::_buildPage(const String& message) {
     }
     button[type="submit"]:hover { background: #4f46e5; }
     button[type="submit"]:active { opacity: 0.8; }
+    .nav-link {
+      display: block; text-align: center; text-decoration: none;
+      padding: 10px 14px; margin-bottom: 18px;
+      color: #c7d2fe; background: #20243a;
+      border: 1px solid #373d64; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600;
+    }
+    .nav-link:hover { background: #292e49; }
   </style>
   <script>
     function toggleStatic(checked) {
@@ -190,6 +198,7 @@ String WebManager::_buildPage(const String& message) {
         <label>WebSocket Server IP</label>
         <input type="text" name="wsHost" value=")" + wsHost + R"(" placeholder="10.0.100.5">
       </div>
+      <a class="nav-link" href="/websocket">Configure WebSocket Messages</a>
 
       <hr class="divider">
       <h2>Device Role</h2>
@@ -230,11 +239,107 @@ String WebManager::_buildPage(const String& message) {
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
+String WebManager::_buildWebSocketPage(const String& message) {
+    String html = R"(<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebSocket Message Controls</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 40px 16px; min-height: 100vh; background: #0f1117;
+      color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex; align-items: flex-start; justify-content: center; }
+    .card { width: 100%; max-width: 480px; padding: 36px; background: #1a1d27;
+      border: 1px solid #2d3148; border-radius: 12px; }
+    h1 { margin: 0 0 8px; font-size: 1.2rem; color: #f1f5f9; }
+    .intro { margin: 0 0 24px; color: #94a3b8; font-size: 0.85rem; line-height: 1.45; }
+    .message { padding: 12px 16px; margin-bottom: 20px; border: 1px solid #14532d;
+      border-radius: 8px; background: #14281e; color: #86efac; font-size: 0.875rem; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; margin-bottom: 16px; background: #12151f;
+      border: 1px solid #2d3148; border-radius: 8px; }
+    .toggle-label { font-size: 0.9rem; }
+    .toggle-label small { display: block; margin-top: 3px; color: #64748b; font-size: 0.76rem; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; cursor: pointer; background: #2d3148;
+      border-radius: 24px; transition: background 0.2s; }
+    .slider::before { content: ''; position: absolute; width: 18px; height: 18px;
+      left: 3px; bottom: 3px; background: #94a3b8; border-radius: 50%;
+      transition: transform 0.2s, background 0.2s; }
+    input:checked + .slider { background: #6366f1; }
+    input:checked + .slider::before { transform: translateX(20px); background: #fff; }
+    button, .back { display: block; width: 100%; padding: 12px; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; text-align: center; }
+    button { margin-top: 24px; border: 0; cursor: pointer; color: #fff; background: #6366f1; }
+    button:hover { background: #4f46e5; }
+    .back { margin-top: 12px; color: #94a3b8; text-decoration: none; }
+    .back:hover { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>WebSocket Message Controls</h1>
+    <p class="intro">Choose which PLC update messages this controller may transmit. Incoming WebSocket messages are unaffected.</p>)";
+
+    if (message.length()) {
+        html += "<div class='message'>" + message + "</div>";
+    }
+
+    html += R"(
+    <form method="POST" action="/websocket/save">
+      <div class="toggle-row">
+        <div class="toggle-label">Send Registers
+          <small>Allow setRegisters counter updates</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" name="sendRegisters" value="1" )"
+        + String(_ws.sendRegistersEnabled ? "checked" : "") + R"(>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-label">Send Inputs
+          <small>Allow setInput state updates</small>
+        </div>
+        <label class="switch">
+          <input type="checkbox" name="sendInputs" value="1" )"
+        + String(_ws.sendInputsEnabled ? "checked" : "") + R"(>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <button type="submit">Save Message Controls</button>
+    </form>
+    <a class="back" href="/">Back to Device Configuration</a>
+  </div>
+</body>
+</html>)";
+
+    return html;
+}
+
 void WebManager::_setupRoutes() {
 
     // GET / — config page
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {
         req->send(200, "text/html", _buildPage());
+    });
+
+    _server.on("/websocket", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        req->send(200, "text/html", _buildWebSocketPage());
+    });
+
+    _server.on("/websocket/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        _ws.sendRegistersEnabled = req->hasParam("sendRegisters", true);
+        _ws.sendInputsEnabled = req->hasParam("sendInputs", true);
+        _ws.savePreferences();
+
+        Serial.printf("[WEB] WebSocket sends: setRegisters=%s, setInput=%s\n",
+                      _ws.sendRegistersEnabled ? "enabled" : "disabled",
+                      _ws.sendInputsEnabled ? "enabled" : "disabled");
+        req->send(200, "text/html", _buildWebSocketPage("Message controls saved."));
     });
 
     // POST /save — save and reboot

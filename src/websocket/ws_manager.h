@@ -4,7 +4,6 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include "../role_config.h"
-#include "../led_animator/led_animator.h"
 
 // Mirrors the Python register map
 // Counter channel → PLC register
@@ -14,6 +13,7 @@
 // Reg 2 = sum of Reg 7,8,9,10  (reserved for future channels)
 
 #define WS_RECONNECT_DELAY_MS   3000
+#define WS_MAX_MESSAGE_SIZE     (15 * 1024)
 #define WS_PREFS_NS             "websocket"
 extern bool _debugSerial;
 
@@ -24,15 +24,16 @@ extern bool _debugSerial;
 // coils: pointer to bool array, count: number of coils
 typedef void (*CoilCallback)(const bool* coils, uint8_t count);
 
-typedef void (*LedModeCallback)(LedMode redMode, LedMode blueMode);
+typedef void (*LedStatusCallback)(JsonArray redPixels, JsonArray bluePixels);
 
 
 class WsManager {
 public:
-    void begin(const String& host, uint16_t port, const String& path = "/api/plc/websocket");
+    void begin(const String& host, uint16_t port, const String& path = "/setup/field_testing/websocket");
     void update();                          // Call from loop()
 
-    void onLedMode(LedModeCallback cb);
+    void onLedStatus(LedStatusCallback cb);
+    void setLedStatusEnabled(bool enabled);
     
     bool isConnected();
 
@@ -50,6 +51,8 @@ public:
     // Preferences — ready for webserver config later
     String  arenaHost = "10.0.100.5";
     uint16_t arenaPort = 8080;
+    bool sendRegistersEnabled = true;
+    bool sendInputsEnabled = true;
     void loadPreferences();
     void savePreferences();
 
@@ -57,13 +60,17 @@ private:
     WebSocketsClient    _ws;
     bool                _connected  = false;
     uint32_t            _lastRetry  = 0;
+    bool                _receivingTextFragment = false;
+    bool                _ledStatusEnabled = true;
+    String              _fragmentBuffer;
     CoilCallback        _coilCb     = nullptr;
     Preferences         _prefs;
 
     void _onEvent(WStype_t type, uint8_t* payload, size_t length);
+    bool _appendTextFragment(const uint8_t* payload, size_t length);
     void _handleMessage(const String& raw);
     void _handleCoilChange(JsonObject data);
     void _sendJson(const String& type, JsonDocument& data);
-    LedModeCallback _ledModeCb = nullptr;
-    void _handleLedMode(JsonObject data);
+    LedStatusCallback _ledStatusCb = nullptr;
+    void _handleLedStatus(JsonObject data);
 };

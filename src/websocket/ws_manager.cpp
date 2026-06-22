@@ -7,6 +7,8 @@ void WsManager::loadPreferences() {
     _prefs.begin(WS_PREFS_NS, true);
     arenaHost = _prefs.getString("arenaHost", "10.0.100.5");
     arenaPort = _prefs.getUShort("arenaPort", 8080);
+    sendRegistersEnabled = _prefs.getBool("setRegisters", true);
+    sendInputsEnabled = _prefs.getBool("setInput", true);
     _prefs.end();
     //Serial.printf("[WS] Prefs loaded — %s:%d\n", arenaHost.c_str(), arenaPort);
     WS_LOG("[WS] Prefs loaded — %s:%d\n", arenaHost.c_str(), arenaPort);
@@ -16,6 +18,8 @@ void WsManager::savePreferences() {
     _prefs.begin(WS_PREFS_NS, false);
     _prefs.putString("arenaHost", arenaHost);
     _prefs.putUShort("arenaPort", arenaPort);
+    _prefs.putBool("setRegisters", sendRegistersEnabled);
+    _prefs.putBool("setInput", sendInputsEnabled);
     _prefs.end();
     Serial.println("[WS] Prefs saved");
 }
@@ -74,7 +78,7 @@ void WsManager::_sendJson(const String& type, JsonDocument& doc) {
 }
 
 void WsManager::sendInputs(const bool* states, uint8_t count) {
-    if (!_connected) return;
+    if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
     doc["type"] = "setInput";     
@@ -89,7 +93,7 @@ void WsManager::sendInputs(const bool* states, uint8_t count) {
     _sendJson("setInput", doc);
 }
 void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel version for testing
-    if (!_connected) return;
+    if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
     doc["type"] = "setInput";   
@@ -105,7 +109,7 @@ void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel
 void WsManager::sendCounters(int64_t ch0, int64_t ch1,
                               int64_t ch2, int64_t ch3,
                               const RoleConfig& role) {
-    if (!_connected) return;
+    if (!sendRegistersEnabled || !_connected) return;
 
     int64_t total = ch0 + ch1 + ch2 + ch3;
 
@@ -166,12 +170,15 @@ void WsManager::_handleMessage(const String& raw) {
     String type = doc["type"].as<String>();
     JsonObject data = doc["data"].as<JsonObject>();
 
-    // === Print the full raw JSON (recommended) ===
-    WS_LOG("[WS] ← Received JSON:");
-    if (_debugSerial){
-        serializeJsonPretty(doc, Serial);  // Pretty print
+    // Avoid dumping high-rate LED frames when another LED source is active.
+    bool suppressLog = type == "ledStatus" && !_ledStatusEnabled;
+    if (!suppressLog) {
+        WS_LOG("[WS] ← Received JSON:");
+        if (_debugSerial) {
+            serializeJsonPretty(doc, Serial);
+        }
+        WS_LOG(" ");
     }
-    WS_LOG(" ");  // Extra newline for readability
 
     if (type == "plcIoChange") {
         WS_LOG("[WS] ← plcIoChange received\n");
@@ -181,10 +188,8 @@ void WsManager::_handleMessage(const String& raw) {
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
-    } else if (type == "setLedMode") {
-        Serial.printf("[WS] ← setLedMode: %s\n", type.c_str());
-        serializeJsonPretty(doc, Serial);  // Pretty print
-        _handleLedMode(data);
+    } else if (type == "ledStatus") {
+        _handleLedStatus(data);
     } else if (type == "ping") {
         Serial.printf("[WS] ← Ping received");
     } else if (type == "error") {
@@ -207,11 +212,31 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
 
         case WStype_DISCONNECTED:
             _connected = false;
+            _receivingTextFragment = false;
+            _fragmentBuffer = "";
             Serial.println("[WS] Disconnected — will retry");
             break;
 
         case WStype_TEXT:
-            _handleMessage(String((char*)payload));
+            _handleMessage(String(payload, length));
+            break;
+
+        case WStype_FRAGMENT_TEXT_START:
+            _fragmentBuffer = "";
+            _receivingTextFragment = true;
+            _appendTextFragment(payload, length);
+            break;
+
+        case WStype_FRAGMENT:
+            _appendTextFragment(payload, length);
+            break;
+
+        case WStype_FRAGMENT_FIN:
+            if (_appendTextFragment(payload, length)) {
+                _handleMessage(_fragmentBuffer);
+            }
+            _receivingTextFragment = false;
+            _fragmentBuffer = "";
             break;
 
         case WStype_ERROR:
@@ -224,13 +249,48 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
     
 }
 
-void WsManager::onLedMode(LedModeCallback cb) {
-    _ledModeCb = cb;
+bool WsManager::_appendTextFragment(const uint8_t* payload, size_t length) {
+    if (!_receivingTextFragment) return false;
+
+    if (_fragmentBuffer.length() + length > WS_MAX_MESSAGE_SIZE) {
+        Serial.printf("[WS] Fragmented message dropped: exceeds %u bytes\n",
+                      (unsigned)WS_MAX_MESSAGE_SIZE);
+        _receivingTextFragment = false;
+        _fragmentBuffer = "";
+        return false;
+    }
+
+    if (!_fragmentBuffer.concat(payload, length)) {
+        Serial.println("[WS] Fragmented message dropped: insufficient memory");
+        _receivingTextFragment = false;
+        _fragmentBuffer = "";
+        return false;
+    }
+
+    return true;
 }
 
-void WsManager::_handleLedMode(JsonObject data) {
-    LedMode redMode  = (LedMode)data["RedMode"].as<uint8_t>();
-    LedMode blueMode = (LedMode)data["BlueMode"].as<uint8_t>();
-    WS_LOG("[WS] ← setLedMode red=%d blue=%d\n", redMode, blueMode);
-    if (_ledModeCb) _ledModeCb(redMode, blueMode);
+void WsManager::onLedStatus(LedStatusCallback cb) {
+    _ledStatusCb = cb;
+}
+
+void WsManager::setLedStatusEnabled(bool enabled) {
+    _ledStatusEnabled = enabled;
+}
+
+void WsManager::_handleLedStatus(JsonObject data) {
+    if (!_ledStatusEnabled) return;
+
+    JsonArray redPixels = data["Red"].as<JsonArray>();
+    JsonArray bluePixels = data["Blue"].as<JsonArray>();
+
+    Serial.printf("[WS] ← ledStatus received: redPixels=%u bluePixels=%u\n",
+                  (unsigned)redPixels.size(), (unsigned)bluePixels.size());
+
+    if (redPixels.isNull() || bluePixels.isNull()) {
+        Serial.println("[WS] ledStatus ignored: missing Red or Blue pixel array");
+        return;
+    }
+
+    if (_ledStatusCb) _ledStatusCb(redPixels, bluePixels);
 }

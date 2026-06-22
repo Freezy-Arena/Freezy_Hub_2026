@@ -23,6 +23,7 @@ private:
     uint32_t    _rebootAt       = 0;
 
     String _buildPage(const String& message = "");
+    String _buildWebSocketPage(const String& message = "");
     String _buildPageSimple(const String& message = "");
     void   _setupRoutes();
 };

@@ -108,7 +108,7 @@ Three files need updating each season to match the arena's PLC assignments:
 
 ## WebSocket Protocol
 
-Connects to `ws://<arenaHost>:<arenaPort>/api/plc/websocket`
+Connects to `ws://<arenaHost>:<arenaPort>/setup/field_testing/websocket`
 
 ### Outbound — Register Update
 ```json
