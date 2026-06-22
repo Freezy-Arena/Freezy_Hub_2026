@@ -283,14 +283,25 @@ void WsManager::_handleLedStatus(JsonObject data) {
 
     JsonArray redPixels = data["Red"].as<JsonArray>();
     JsonArray bluePixels = data["Blue"].as<JsonArray>();
+    JsonVariant redModeValue = data["RedMode"];
+    JsonVariant blueModeValue = data["BlueMode"];
 
-    Serial.printf("[WS] ← ledStatus received: redPixels=%u bluePixels=%u\n",
-                  (unsigned)redPixels.size(), (unsigned)bluePixels.size());
-
-    if (redPixels.isNull() || bluePixels.isNull()) {
-        Serial.println("[WS] ledStatus ignored: missing Red or Blue pixel array");
+    if (redModeValue.isNull() || blueModeValue.isNull()) {
+        Serial.println("[WS] ledStatus ignored: missing RedMode or BlueMode");
         return;
     }
 
-    if (_ledStatusCb) _ledStatusCb(redPixels, bluePixels);
+    int redMode = redModeValue.as<int>();
+    int blueMode = blueModeValue.as<int>();
+    if (redMode < 0 || redMode > 11 || blueMode < 0 || blueMode > 11) {
+        Serial.printf("[WS] ledStatus ignored: invalid modes RedMode=%d BlueMode=%d\n",
+                      redMode, blueMode);
+        return;
+    }
+
+    Serial.printf("[WS] ← ledStatus received: RedMode=%d BlueMode=%d redPixels=%u bluePixels=%u\n",
+                  redMode, blueMode,
+                  (unsigned)redPixels.size(), (unsigned)bluePixels.size());
+
+    if (_ledStatusCb) _ledStatusCb(redMode, blueMode);
 }

@@ -8,6 +8,7 @@
 #include "websocket/coil_map.h"
 #include "websocket/input_map.h"
 #include "dmx_led/dmx_led_manager.h"
+#include "led_animator/led_animator.h"
 
 LedManager leds;
 CounterManager counters;
@@ -17,6 +18,7 @@ RoleManager     roleManager;
 WsManager       ws;
 WebManager      web(network, roleManager, leds, ws);       // Pass managers so web can read/write prefs
 DmxLedManager   dmxLed(leds, roleManager);
+LedAnimator     ledAnimator(leds, roleManager);
 
 #define DEBUG_SERIAL false           // Set false to silence all Serial output
 bool _debugSerial = DEBUG_SERIAL;
@@ -64,31 +66,14 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
     }
 }
 
-void onLedStatusUpdate(JsonArray redPixels, JsonArray bluePixels) {
+void onLedStatusUpdate(int redMode, int blueMode) {
     if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
 
-    const bool isRedHub = roleManager.getRole() == ROLE_RED_HUB;
-    JsonArray pixels = isRedHub ? redPixels : bluePixels;
-    uint16_t ledCount = leds.getLedCount();
-    uint16_t pixelCount = pixels.size();
-    uint16_t copyCount = min(ledCount, pixelCount);
+    Serial.printf("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
+                  redMode, blueMode);
 
-    for (uint16_t i = 0; i < copyCount; i++) {
-        JsonObject pixel = pixels[i].as<JsonObject>();
-        uint8_t red = (uint8_t)constrain(pixel["R"].as<int>(), 0, 255);
-        uint8_t green = (uint8_t)constrain(pixel["G"].as<int>(), 0, 255);
-        uint8_t blue = (uint8_t)constrain(pixel["B"].as<int>(), 0, 255);
-        leds.setLedRaw(i, CRGB(red, green, blue));
-    }
-
-    for (uint16_t i = copyCount; i < ledCount; i++) {
-        leds.setLedRaw(i, CRGB::Black);
-    }
-
-    leds.show();
-    Serial.printf("[LED] Applied %s ledStatus frame: %u pixels (%u LEDs configured)\n",
-                  isRedHub ? "Red" : "Blue",
-                  (unsigned)pixelCount, (unsigned)ledCount);
+    ledAnimator.setMode(static_cast<LedMode>(redMode),
+                        static_cast<LedMode>(blueMode));
 }
 
 void setup()
@@ -112,6 +97,7 @@ void setup()
     relays.addChannel(1, role.relayLight); // Vertical hub motor relay
 
     leds.begin();
+    ledAnimator.begin();
 
     network.begin();
     web.begin();                    // Start webserver after network is ready
@@ -137,7 +123,10 @@ void loop()
     if (ledMode == LED_CONTROL_DMX) {
         dmxLed.update();
     }
-    // WebSocket LED frames are applied when ledStatus messages arrive.
+    // WebSocket mode animations are selected by ledStatus and rendered locally.
+    if (ledMode == LED_CONTROL_WEBSOCKET) {
+        ledAnimator.update();
+    }
 
     // Coil mode — handled in onCoilUpdate
     // Only pass coil LED updates through if in coil mode

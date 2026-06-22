@@ -24,7 +24,8 @@ extern bool _debugSerial;
 // coils: pointer to bool array, count: number of coils
 typedef void (*CoilCallback)(const bool* coils, uint8_t count);
 
-typedef void (*LedStatusCallback)(JsonArray redPixels, JsonArray bluePixels);
+// ledStatus mode callback for the server's RedMode and BlueMode fields.
+typedef void (*LedStatusCallback)(int redMode, int blueMode);
 
 
 class WsManager {
