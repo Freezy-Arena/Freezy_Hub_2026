@@ -251,7 +251,7 @@ void WsManager::_handleMessage(const String& raw) {
     JsonObject data = doc["data"].as<JsonObject>();
 
     // Avoid dumping high-rate LED frames when another LED source is active.
-    bool suppressLog = type == "ledStatus" && !_ledStatusEnabled;
+    bool suppressLog = type == "setLedMode" && !_ledModeEnabled;
     if (!suppressLog) {
         WS_LOG("[WS] ← Received JSON:");
         if (_debugSerial) {
@@ -268,8 +268,8 @@ void WsManager::_handleMessage(const String& raw) {
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
-    } else if (type == "ledStatus") {
-        _handleLedStatus(data);
+    } else if (type == "setLedMode") {
+        _handleSetLedMode(data);
     } else if (type == "ping") {
         Serial.printf("[WS] ← Ping received");
     } else if (type == "error") {
@@ -366,38 +366,35 @@ bool WsManager::_appendTextFragment(const uint8_t* payload, size_t length) {
     return true;
 }
 
-void WsManager::onLedStatus(LedStatusCallback cb) {
-    _ledStatusCb = cb;
+void WsManager::onSetLedMode(LedModeCallback cb) {
+    _ledModeCb = cb;
 }
 
-void WsManager::setLedStatusEnabled(bool enabled) {
-    _ledStatusEnabled = enabled;
+void WsManager::setLedModeEnabled(bool enabled) {
+    _ledModeEnabled = enabled;
 }
 
-void WsManager::_handleLedStatus(JsonObject data) {
-    if (!_ledStatusEnabled) return;
+void WsManager::_handleSetLedMode(JsonObject data) {
+    if (!_ledModeEnabled) return;
 
-    JsonArray redPixels = data["Red"].as<JsonArray>();
-    JsonArray bluePixels = data["Blue"].as<JsonArray>();
     JsonVariant redModeValue = data["RedMode"];
     JsonVariant blueModeValue = data["BlueMode"];
 
     if (redModeValue.isNull() || blueModeValue.isNull()) {
-        Serial.println("[WS] ledStatus ignored: missing RedMode or BlueMode");
+        Serial.println("[WS] setLedMode ignored: missing RedMode or BlueMode");
         return;
     }
 
     int redMode = redModeValue.as<int>();
     int blueMode = blueModeValue.as<int>();
     if (redMode < 0 || redMode > 16 || blueMode < 0 || blueMode > 16) {
-        Serial.printf("[WS] ledStatus ignored: invalid modes RedMode=%d BlueMode=%d\n",
+        Serial.printf("[WS] setLedMode ignored: invalid modes RedMode=%d BlueMode=%d\n",
                       redMode, blueMode);
         return;
     }
 
-    Serial.printf("[WS] ← ledStatus received: RedMode=%d BlueMode=%d redPixels=%u bluePixels=%u\n",
-                  redMode, blueMode,
-                  (unsigned)redPixels.size(), (unsigned)bluePixels.size());
+    Serial.printf("[WS] ← setLedMode received: RedMode=%d BlueMode=%d\n",
+                  redMode, blueMode);
 
-    if (_ledStatusCb) _ledStatusCb(redMode, blueMode);
+    if (_ledModeCb) _ledModeCb(redMode, blueMode);
 }

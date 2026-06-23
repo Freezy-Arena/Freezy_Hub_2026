@@ -66,7 +66,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
     }
 }
 
-void onLedStatusUpdate(int redMode, int blueMode) {
+void onSetLedMode(int redMode, int blueMode) {
     if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
 
     Serial.printf("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
@@ -104,7 +104,7 @@ void setup()
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
-    ws.onLedStatus(onLedStatusUpdate);
+    ws.onSetLedMode(onSetLedMode);
     ws.begin("", 0);                // Empty = use stored prefs
 
     dmxLed.begin();
@@ -113,7 +113,7 @@ void setup()
 void loop()
 {
     network.update();
-    ws.setLedStatusEnabled(network.ledControlMode == LED_CONTROL_WEBSOCKET);
+    ws.setLedModeEnabled(network.ledControlMode == LED_CONTROL_WEBSOCKET);
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
 
@@ -123,7 +123,7 @@ void loop()
     if (ledMode == LED_CONTROL_DMX) {
         dmxLed.update();
     }
-    // WebSocket mode animations are selected by ledStatus and rendered locally.
+    // WebSocket mode animations are selected by setLedMode and rendered locally.
     if (ledMode == LED_CONTROL_WEBSOCKET) {
         ledAnimator.update();
     }

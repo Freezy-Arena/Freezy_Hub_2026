@@ -96,7 +96,7 @@ FastLED selects the RGB color order during initialization. The LED page therefor
 |---|---|
 | Coil | PLC light coils select the role color; field reset displays green |
 | DMX Direct | The ESP32 renders incoming DMX LED data directly |
-| DMX WebSocket | `ledStatus.RedMode` and `ledStatus.BlueMode` select locally rendered animations |
+| DMX WebSocket | `setLedMode.RedMode` and `setLedMode.BlueMode` select locally rendered animations |
 
 ### Arena animation modes
 
@@ -177,13 +177,13 @@ Counter values are sent every 500 ms when register sending is enabled.
 }
 ```
 
-### Inbound LED status
+### Inbound LED mode
 
-`RedMode` and `BlueMode` are required and must be in the range 0–16. Pixel arrays may also be present in the arena payload, but WebSocket LED control renders from the mode values locally.
+`RedMode` and `BlueMode` are the only data fields. Both are required and must be in the range 0–16.
 
 ```json
 {
-  "type": "ledStatus",
+  "type": "setLedMode",
   "data": {
     "RedMode": 12,
     "BlueMode": 3

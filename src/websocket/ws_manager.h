@@ -24,17 +24,17 @@ extern bool _debugSerial;
 // coils: pointer to bool array, count: number of coils
 typedef void (*CoilCallback)(const bool* coils, uint8_t count);
 
-// ledStatus mode callback for the server's RedMode and BlueMode fields.
-typedef void (*LedStatusCallback)(int redMode, int blueMode);
+// setLedMode callback for the server's RedMode and BlueMode fields.
+typedef void (*LedModeCallback)(int redMode, int blueMode);
 
 
 class WsManager {
 public:
-    void begin(const String& host, uint16_t port, const String& path = "/setup/field_testing/websocket");
+    void begin(const String& host, uint16_t port, const String& path = "/api/plc/websocket");
     void update();                          // Call from loop()
 
-    void onLedStatus(LedStatusCallback cb);
-    void setLedStatusEnabled(bool enabled);
+    void onSetLedMode(LedModeCallback cb);
+    void setLedModeEnabled(bool enabled);
     
     bool isConnected();
 
@@ -67,7 +67,7 @@ private:
     String              _sessionCookie;
     uint32_t            _lastRetry  = 0;
     bool                _receivingTextFragment = false;
-    bool                _ledStatusEnabled = true;
+    bool                _ledModeEnabled = true;
     String              _fragmentBuffer;
     CoilCallback        _coilCb     = nullptr;
     Preferences         _prefs;
@@ -78,6 +78,6 @@ private:
     void _handleCoilChange(JsonObject data);
     bool _authenticateWithSession();
     void _sendJson(const String& type, JsonDocument& data);
-    LedStatusCallback _ledStatusCb = nullptr;
-    void _handleLedStatus(JsonObject data);
+    LedModeCallback _ledModeCb = nullptr;
+    void _handleSetLedMode(JsonObject data);
 };
