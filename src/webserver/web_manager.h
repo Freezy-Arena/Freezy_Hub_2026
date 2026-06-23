@@ -24,6 +24,7 @@ private:
 
     String _buildPage(const String& message = "");
     String _buildWebSocketPage(const String& message = "");
+    String _buildLedPage(const String& message = "");
     String _buildPageSimple(const String& message = "");
     void   _setupRoutes();
 };

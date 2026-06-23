@@ -31,9 +31,6 @@ String WebManager::_buildPage(const String& message) {
     String ip     = _eth.staticIP;
     String gw     = _eth.staticGW;
     bool  isDHCP  = _eth.useDHCP;
-    uint8_t ledMode = (uint8_t)_eth.ledControlMode;
-    uint16_t ledCount = _leds.getLedCount();
-    uint16_t maxLedCount = _leds.getMaxLedCount();
     String wsHost = _ws.arenaHost;
 
     String html = R"(<!DOCTYPE html>
@@ -230,18 +227,7 @@ String WebManager::_buildPage(const String& message) {
 
       <hr class="divider">
       <h2>LED Control</h2>
-      <div class="field">
-        <label>Control Mode</label>
-        <select name="ledControl">
-          <option value="0" )" + String(ledMode == 0 ? "selected" : "") + R"(>Coil</option>
-          <option value="1" )" + String(ledMode == 1 ? "selected" : "") + R"(>DMX Direct (Single Universe)</option>
-          <option value="2" )" + String(ledMode == 2 ? "selected" : "") + R"(>DMX WebSocket (Hub role)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Number of LEDs</label>
-        <input type="number" name="ledCount" value=")" + String(ledCount) + R"(" min="1" max=")" + String(maxLedCount) + R"(" step="1">
-      </div>
+      <a class="nav-link" href="/led">Configure LED Settings</a>
 
       <hr class="divider">
       <button type="submit">Save &amp; Reboot</button>
@@ -254,6 +240,89 @@ String WebManager::_buildPage(const String& message) {
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
+
+String WebManager::_buildLedPage(const String& message) {
+    uint8_t ledMode = static_cast<uint8_t>(_eth.ledControlMode);
+    String colorOrder = _leds.getColorOrderName();
+
+    String html = R"(<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LED Settings</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 40px 16px; min-height: 100vh; background: #0f1117;
+      color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex; align-items: flex-start; justify-content: center; }
+    .card { width: 100%; max-width: 480px; padding: 36px; background: #1a1d27;
+      border: 1px solid #2d3148; border-radius: 12px; }
+    h1 { margin: 0 0 8px; font-size: 1.2rem; color: #f1f5f9; }
+    .intro { margin: 0 0 20px; color: #94a3b8; font-size: 0.85rem; line-height: 1.45; }
+    .warning { padding: 12px 16px; margin-bottom: 20px; border: 1px solid #854d0e;
+      border-radius: 8px; background: #2b2111; color: #fde68a; font-size: 0.85rem; line-height: 1.4; }
+    .message { padding: 12px 16px; margin-bottom: 20px; border: 1px solid #7f1d1d;
+      border-radius: 8px; background: #2d1515; color: #fca5a5; font-size: 0.875rem; }
+    .field { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 6px; color: #cbd5e1; font-size: 0.85rem; }
+    input, select { width: 100%; padding: 11px 12px; color: #e2e8f0; background: #12151f;
+      border: 1px solid #2d3148; border-radius: 8px; font-size: 0.9rem; }
+    input:focus, select:focus { outline: none; border-color: #6366f1; }
+    button, .back { display: block; width: 100%; padding: 12px; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; text-align: center; }
+    button { margin-top: 24px; border: 0; cursor: pointer; color: #fff; background: #6366f1; }
+    button:hover { background: #4f46e5; }
+    .back { margin-top: 12px; color: #94a3b8; text-decoration: none; }
+    .back:hover { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LED Settings</h1>
+    <p class="intro">Configure how this controller drives the connected LED strip.</p>
+    <div class="warning"><strong>Reboot required:</strong> Saving this page will reboot the controller so all LED changes can take effect.</div>)";
+
+    if (message.length()) {
+        html += "<div class='message'>" + message + "</div>";
+    }
+
+    html += R"(
+    <form method="POST" action="/led/save">
+      <div class="field">
+        <label for="ledControl">Control Mode</label>
+        <select id="ledControl" name="ledControl">
+          <option value="0" )" + String(ledMode == 0 ? "selected" : "") + R"(>Coil</option>
+          <option value="1" )" + String(ledMode == 1 ? "selected" : "") + R"(>DMX Direct (Single Universe)</option>
+          <option value="2" )" + String(ledMode == 2 ? "selected" : "") + R"(>DMX WebSocket (Hub role)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ledCount">Number of LEDs</label>
+        <input id="ledCount" type="number" name="ledCount" value=")"
+        + String(_leds.getLedCount()) + R"(" min="1" max=")"
+        + String(_leds.getMaxLedCount()) + R"(" step="1" required>
+      </div>
+      <div class="field">
+        <label for="colorOrder">RGB Color Order</label>
+        <select id="colorOrder" name="colorOrder">
+          <option value="RGB" )" + String(colorOrder == "RGB" ? "selected" : "") + R"(>RGB</option>
+          <option value="RBG" )" + String(colorOrder == "RBG" ? "selected" : "") + R"(>RBG</option>
+          <option value="GRB" )" + String(colorOrder == "GRB" ? "selected" : "") + R"(>GRB</option>
+          <option value="GBR" )" + String(colorOrder == "GBR" ? "selected" : "") + R"(>GBR</option>
+          <option value="BRG" )" + String(colorOrder == "BRG" ? "selected" : "") + R"(>BRG</option>
+          <option value="BGR" )" + String(colorOrder == "BGR" ? "selected" : "") + R"(>BGR</option>
+        </select>
+      </div>
+      <button type="submit">Save &amp; Reboot</button>
+    </form>
+    <a class="back" href="/">Back to Device Configuration</a>
+  </div>
+</body>
+</html>)";
+
+    return html;
+}
 
 String WebManager::_buildWebSocketPage(const String& message) {
     String html = R"(<!DOCTYPE html>
@@ -362,6 +431,53 @@ void WebManager::_setupRoutes() {
         req->send(200, "text/html", _buildWebSocketPage());
     });
 
+    _server.on("/led", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        req->send(200, "text/html", _buildLedPage());
+    });
+
+    _server.on("/led/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        int mode = req->hasParam("ledControl", true)
+            ? req->getParam("ledControl", true)->value().toInt() : -1;
+        int count = req->hasParam("ledCount", true)
+            ? req->getParam("ledCount", true)->value().toInt() : -1;
+        String order = req->hasParam("colorOrder", true)
+            ? req->getParam("colorOrder", true)->value() : "";
+
+        if (mode < LED_CONTROL_COIL || mode > LED_CONTROL_WEBSOCKET) {
+            req->send(200, "text/html", _buildLedPage("ERROR: Invalid LED control mode."));
+            return;
+        }
+        if (count < 1 || count > _leds.getMaxLedCount()) {
+            req->send(200, "text/html",
+                      _buildLedPage(String("ERROR: LED count must be between 1 and ")
+                                    + String(_leds.getMaxLedCount()) + "."));
+            return;
+        }
+        if (!_leds.setColorOrderByName(order)) {
+            req->send(200, "text/html", _buildLedPage("ERROR: Invalid RGB color order."));
+            return;
+        }
+
+        _eth.ledControlMode = static_cast<LedControlMode>(mode);
+        _leds.setLedCount(static_cast<uint16_t>(count));
+        _eth.savePreferences();
+        _leds.savePreferences();
+
+        Serial.printf("[WEB] LED settings saved - mode: %d, count: %d, color order: %s\n",
+                      mode, count, order.c_str());
+
+        String rebootPage = R"(<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <meta http-equiv="refresh" content="5;url=/"><title>Rebooting</title></head>
+        <body style="background:#0f1117;color:#e2e8f0;font-family:sans-serif;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+        <div style="text-align:center;"><h2 style="color:#86efac;">LED Settings Saved</h2>
+        <p style="color:#94a3b8;">Device is rebooting &mdash; reconnecting in 5 seconds...</p>
+        </div></body></html>)";
+        req->send(200, "text/html", rebootPage);
+        _rebootPending = true;
+        _rebootAt = millis() + 3000;
+    });
+
     _server.on("/websocket/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
         if (req->hasParam("authUsername", true))
             _ws.authUsername = req->getParam("authUsername", true)->value();
@@ -421,28 +537,6 @@ void WebManager::_setupRoutes() {
         if (req->hasParam("role", true)) {
             _role.setRoleByName(req->getParam("role", true)->value());
             _role.savePreferences();
-        }
-
-        // LED control mode
-        if (req->hasParam("ledControl", true)) {
-            uint8_t mode = req->getParam("ledControl", true)->value().toInt();
-            Serial.printf("[WEB] LED control mode: %d\n", mode);
-            _eth.ledControlMode = (LedControlMode)mode;
-        }
-
-        // LED count
-        if (req->hasParam("ledCount", true)) {
-            int count = req->getParam("ledCount", true)->value().toInt();
-            if (count < 1 || count > _leds.getMaxLedCount()) {
-                req->send(200, "text/html",
-                          _buildPage(String("ERROR: LED count must be between 1 and ")
-                                     + String(_leds.getMaxLedCount()) + "."));
-                return;
-            }
-
-            _leds.setLedCount((uint16_t)count);
-            _leds.savePreferences();
-            Serial.printf("[WEB] LED count: %d\n", count);
         }
 
         _eth.savePreferences();

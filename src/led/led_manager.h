@@ -6,9 +6,16 @@
 #define LED_DEFAULT_COUNT 125
 #define LED_MAX_LEDS      300
 #define LED_TYPE    WS2812B
-//#define COLOR_ORDER BRG
-#define COLOR_ORDER GRB
 #define LED_PREFS_NS "leds"
+
+enum LedColorOrder : uint8_t {
+    LED_ORDER_RGB = 0,
+    LED_ORDER_RBG,
+    LED_ORDER_GRB,
+    LED_ORDER_GBR,
+    LED_ORDER_BRG,
+    LED_ORDER_BGR
+};
 
 class LedManager {
 public:
@@ -27,6 +34,9 @@ public:
     uint16_t getLedCount() const;
     uint16_t getMaxLedCount() const;
     void setLedCount(uint16_t count);
+    LedColorOrder getColorOrder() const;
+    const char* getColorOrderName() const;
+    bool setColorOrderByName(const String& name);
     void loadPreferences();
     void savePreferences();
 
@@ -39,6 +49,7 @@ private:
     CRGB _leds[LED_MAX_LEDS];
     Preferences _prefs;
     uint16_t _ledCount = LED_DEFAULT_COUNT;
+    LedColorOrder _colorOrder = LED_ORDER_BRG;
     uint8_t _brightness = 128;
     uint32_t _lastUpdate = 0;
     uint16_t _chasePos = 0;
