@@ -1,5 +1,28 @@
 #include "ws_manager.h"
 #include <Preferences.h>
+#include <HTTPClient.h>
+
+static constexpr const char* WS_SESSION_COOKIE = "session_token";
+
+static String urlEncode(const String& value) {
+    static const char hex[] = "0123456789ABCDEF";
+    String encoded;
+    encoded.reserve(value.length() * 3);
+
+    for (size_t i = 0; i < value.length(); i++) {
+        uint8_t c = static_cast<uint8_t>(value[i]);
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+            c == '.' || c == '~') {
+            encoded += static_cast<char>(c);
+        } else {
+            encoded += '%';
+            encoded += hex[c >> 4];
+            encoded += hex[c & 0x0F];
+        }
+    }
+    return encoded;
+}
 
 // ─── Preferences ─────────────────────────────────────────────────────────────
 
@@ -7,6 +30,8 @@ void WsManager::loadPreferences() {
     _prefs.begin(WS_PREFS_NS, true);
     arenaHost = _prefs.getString("arenaHost", "10.0.100.5");
     arenaPort = _prefs.getUShort("arenaPort", 8080);
+    authUsername = _prefs.getString("authUsername", "admin");
+    authPassword = _prefs.getString("authPassword", "password");
     sendRegistersEnabled = _prefs.getBool("setRegisters", true);
     sendInputsEnabled = _prefs.getBool("setInput", true);
     _prefs.end();
@@ -18,6 +43,8 @@ void WsManager::savePreferences() {
     _prefs.begin(WS_PREFS_NS, false);
     _prefs.putString("arenaHost", arenaHost);
     _prefs.putUShort("arenaPort", arenaPort);
+    _prefs.putString("authUsername", authUsername);
+    _prefs.putString("authPassword", authPassword);
     _prefs.putBool("setRegisters", sendRegistersEnabled);
     _prefs.putBool("setInput", sendInputsEnabled);
     _prefs.end();
@@ -55,6 +82,59 @@ void WsManager::update() {
 
 bool WsManager::isConnected() {
     return _connected;
+}
+
+void WsManager::resetSessionAuth() {
+    _usingSessionAuth = false;
+    _sessionCookie = "";
+    String origin = "Origin: http://" + arenaHost + ":" + String(arenaPort);
+    _ws.setExtraHeaders(origin.c_str());
+}
+
+bool WsManager::_authenticateWithSession() {
+    HTTPClient http;
+    String loginUrl = "http://" + arenaHost + ":" + String(arenaPort) + "/login";
+    const char* responseHeaders[] = {"Set-Cookie"};
+
+    if (!http.begin(loginUrl)) {
+        Serial.println("[WS] Session login failed: could not start HTTP request");
+        return false;
+    }
+
+    http.collectHeaders(responseHeaders, 1);
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    String form = "username=" + urlEncode(authUsername)
+                + "&password=" + urlEncode(authPassword);
+    int status = http.POST(form);
+    String setCookie = http.header("Set-Cookie");
+    http.end();
+
+    String cookiePrefix = String(WS_SESSION_COOKIE) + "=";
+    int tokenStart = setCookie.indexOf(cookiePrefix);
+    if (status != HTTP_CODE_SEE_OTHER || tokenStart < 0) {
+        Serial.printf("[WS] Session login failed: HTTP %d, session cookie missing\n", status);
+        return false;
+    }
+
+    tokenStart += cookiePrefix.length();
+    int tokenEnd = setCookie.indexOf(';', tokenStart);
+    if (tokenEnd < 0) tokenEnd = setCookie.length();
+    String token = setCookie.substring(tokenStart, tokenEnd);
+    token.trim();
+    if (token.isEmpty()) {
+        Serial.println("[WS] Session login failed: empty session token");
+        return false;
+    }
+
+    _sessionCookie = cookiePrefix + token;
+    String headers = "Origin: http://" + arenaHost + ":" + String(arenaPort)
+                   + "\r\nCookie: " + _sessionCookie;
+    _ws.setExtraHeaders(headers.c_str());
+    _usingSessionAuth = true;
+    Serial.println("[WS] Session login succeeded; cookie enabled for retry");
+    return true;
 }
 
 // ─── Coil callback registration ──────────────────────────────────────────────
@@ -214,7 +294,23 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
             _connected = false;
             _receivingTextFragment = false;
             _fragmentBuffer = "";
-            Serial.println("[WS] Disconnected — will retry");
+
+            if (length > 0) {
+                String reason(payload, length);
+                Serial.printf("[WS] Disconnected: %s\n", reason.c_str());
+
+                // Protected cheesy-arena routes redirect unauthenticated
+                // requests to /login. Obtain a session cookie before retrying.
+                bool authenticationRequired =
+                    reason.indexOf("HTTP 401") >= 0 ||
+                    reason.indexOf("HTTP 307") >= 0;
+                if (!_usingSessionAuth && authenticationRequired) {
+                    Serial.println("[WS] Authentication required; requesting session cookie");
+                    _authenticateWithSession();
+                }
+            } else {
+                Serial.println("[WS] Disconnected — will retry");
+            }
             break;
 
         case WStype_TEXT:

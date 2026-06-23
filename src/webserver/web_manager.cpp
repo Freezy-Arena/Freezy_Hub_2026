@@ -1,5 +1,21 @@
 #include "web_manager.h"
 
+static String htmlEscape(const String& value) {
+    String escaped;
+    escaped.reserve(value.length());
+    for (size_t i = 0; i < value.length(); i++) {
+        switch (value[i]) {
+            case '&': escaped += "&amp;";  break;
+            case '<': escaped += "&lt;";   break;
+            case '>': escaped += "&gt;";   break;
+            case '"': escaped += "&quot;"; break;
+            case '\'': escaped += "&#39;"; break;
+            default: escaped += value[i]; break;
+        }
+    }
+    return escaped;
+}
+
 WebManager::WebManager(EthManager& eth, RoleManager& role, LedManager& leds, WsManager& ws)
     : _server(80), _eth(eth), _role(role), _leds(leds), _ws(ws) {}
 
@@ -262,6 +278,11 @@ String WebManager::_buildWebSocketPage(const String& message) {
       border: 1px solid #2d3148; border-radius: 8px; }
     .toggle-label { font-size: 0.9rem; }
     .toggle-label small { display: block; margin-top: 3px; color: #64748b; font-size: 0.76rem; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 6px; color: #cbd5e1; font-size: 0.85rem; }
+    .field input { width: 100%; padding: 11px 12px; color: #e2e8f0; background: #12151f;
+      border: 1px solid #2d3148; border-radius: 8px; font-size: 0.9rem; }
+    .field input:focus { outline: none; border-color: #6366f1; }
     .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; inset: 0; cursor: pointer; background: #2d3148;
@@ -290,6 +311,16 @@ String WebManager::_buildWebSocketPage(const String& message) {
 
     html += R"(
     <form method="POST" action="/websocket/save">
+      <div class="field">
+        <label for="authUsername">Arena username</label>
+        <input id="authUsername" name="authUsername" type="text" autocomplete="username" value=")"
+        + htmlEscape(_ws.authUsername) + R"(" required>
+      </div>
+      <div class="field">
+        <label for="authPassword">Arena password</label>
+        <input id="authPassword" name="authPassword" type="password" autocomplete="current-password" value=")"
+        + htmlEscape(_ws.authPassword) + R"(" required>
+      </div>
       <div class="toggle-row">
         <div class="toggle-label">Send Registers
           <small>Allow setRegisters counter updates</small>
@@ -310,7 +341,7 @@ String WebManager::_buildWebSocketPage(const String& message) {
           <span class="slider"></span>
         </label>
       </div>
-      <button type="submit">Save Message Controls</button>
+      <button type="submit">Save WebSocket Settings</button>
     </form>
     <a class="back" href="/">Back to Device Configuration</a>
   </div>
@@ -332,14 +363,19 @@ void WebManager::_setupRoutes() {
     });
 
     _server.on("/websocket/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        if (req->hasParam("authUsername", true))
+            _ws.authUsername = req->getParam("authUsername", true)->value();
+        if (req->hasParam("authPassword", true))
+            _ws.authPassword = req->getParam("authPassword", true)->value();
         _ws.sendRegistersEnabled = req->hasParam("sendRegisters", true);
         _ws.sendInputsEnabled = req->hasParam("sendInputs", true);
+        _ws.resetSessionAuth();
         _ws.savePreferences();
 
         Serial.printf("[WEB] WebSocket sends: setRegisters=%s, setInput=%s\n",
                       _ws.sendRegistersEnabled ? "enabled" : "disabled",
                       _ws.sendInputsEnabled ? "enabled" : "disabled");
-        req->send(200, "text/html", _buildWebSocketPage("Message controls saved."));
+        req->send(200, "text/html", _buildWebSocketPage("WebSocket settings saved."));
     });
 
     // POST /save — save and reboot

@@ -52,14 +52,19 @@ public:
     // Preferences — ready for webserver config later
     String  arenaHost = "10.0.100.5";
     uint16_t arenaPort = 8080;
+    String authUsername = "admin";
+    String authPassword = "password";
     bool sendRegistersEnabled = true;
     bool sendInputsEnabled = true;
+    void resetSessionAuth();
     void loadPreferences();
     void savePreferences();
 
 private:
     WebSocketsClient    _ws;
     bool                _connected  = false;
+    bool                _usingSessionAuth = false;
+    String              _sessionCookie;
     uint32_t            _lastRetry  = 0;
     bool                _receivingTextFragment = false;
     bool                _ledStatusEnabled = true;
@@ -71,6 +76,7 @@ private:
     bool _appendTextFragment(const uint8_t* payload, size_t length);
     void _handleMessage(const String& raw);
     void _handleCoilChange(JsonObject data);
+    bool _authenticateWithSession();
     void _sendJson(const String& type, JsonDocument& data);
     LedStatusCallback _ledStatusCb = nullptr;
     void _handleLedStatus(JsonObject data);

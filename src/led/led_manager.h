@@ -6,7 +6,8 @@
 #define LED_DEFAULT_COUNT 125
 #define LED_MAX_LEDS      300
 #define LED_TYPE    WS2812B
-#define COLOR_ORDER BRG
+//#define COLOR_ORDER BRG
+#define COLOR_ORDER GRB
 #define LED_PREFS_NS "leds"
 
 class LedManager {
