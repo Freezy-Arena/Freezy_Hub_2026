@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500" role="img" aria-labelledby="title desc">
+  <title id="title">LED settings page</title>
+  <desc id="desc">LED control mode, count, RGB order, and reboot warning.</desc>
+  <rect width="960" height="500" fill="#0f1117"/>
+  <rect x="250" y="28" width="460" height="444" rx="14" fill="#1a1d27" stroke="#2d3148"/>
+  <text x="286" y="69" fill="#f1f5f9" font-family="Arial,sans-serif" font-size="22" font-weight="700">LED Settings</text>
+  <text x="286" y="94" fill="#94a3b8" font-family="Arial,sans-serif" font-size="14">Configure how this controller drives the LED strip.</text>
+  <rect x="286" y="116" width="388" height="52" rx="8" fill="#2b2111" stroke="#854d0e"/>
+  <text x="304" y="139" fill="#fde68a" font-family="Arial,sans-serif" font-size="14" font-weight="700">Reboot required</text>
+  <text x="304" y="158" fill="#fde68a" font-family="Arial,sans-serif" font-size="13">Saving applies settings and restarts the controller.</text>
+  <text x="286" y="199" fill="#cbd5e1" font-family="Arial,sans-serif" font-size="13">Control Mode</text>
+  <rect x="286" y="208" width="388" height="42" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="304" y="234" fill="#e2e8f0" font-family="Arial,sans-serif" font-size="14">DMX WebSocket (Hub role)</text>
+  <text x="286" y="279" fill="#cbd5e1" font-family="Arial,sans-serif" font-size="13">Number of LEDs</text>
+  <rect x="286" y="288" width="388" height="42" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="304" y="314" fill="#e2e8f0" font-family="monospace" font-size="14">125</text>
+  <text x="286" y="359" fill="#cbd5e1" font-family="Arial,sans-serif" font-size="13">RGB Color Order</text>
+  <rect x="286" y="368" width="388" height="42" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="304" y="394" fill="#e2e8f0" font-family="monospace" font-size="14">BRG (default)</text>
+  <rect x="286" y="427" width="388" height="42" rx="8" fill="#6366f1"/>
+  <text x="480" y="453" fill="white" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" font-weight="700">Save &amp; Reboot</text>
+  <path d="M250 142H150" stroke="#f59e0b" stroke-width="2"/>
+  <text x="34" y="137" fill="#fde68a" font-family="Arial,sans-serif" font-size="14" font-weight="700">Changes apply</text>
+  <text x="34" y="157" fill="#fde68a" font-family="Arial,sans-serif" font-size="14" font-weight="700">after reboot</text>
+  <path d="M710 389H810" stroke="#818cf8" stroke-width="2"/>
+  <text x="826" y="384" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">All six RGB</text>
+  <text x="826" y="404" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">orders supported</text>
+</svg>

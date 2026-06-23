@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32 hub device configuration dashboard</title>
+  <desc id="desc">A guide to the network, WebSocket, role, and LED configuration areas.</desc>
+  <rect width="960" height="540" fill="#0f1117"/>
+  <rect x="270" y="28" width="420" height="484" rx="14" fill="#1a1d27" stroke="#2d3148"/>
+  <circle cx="306" cy="65" r="6" fill="#22c55e"/>
+  <text x="324" y="71" fill="#f1f5f9" font-family="Arial,sans-serif" font-size="20" font-weight="700">Device Configuration</text>
+  <rect x="300" y="94" width="360" height="58" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="318" y="118" fill="#94a3b8" font-family="Arial,sans-serif" font-size="13">IP Address</text>
+  <text x="642" y="118" fill="#e2e8f0" text-anchor="end" font-family="monospace" font-size="13">192.168.10.68</text>
+  <text x="318" y="140" fill="#94a3b8" font-family="Arial,sans-serif" font-size="13">Mode</text>
+  <text x="642" y="140" fill="#e2e8f0" text-anchor="end" font-family="monospace" font-size="13">DHCP</text>
+  <text x="300" y="181" fill="#64748b" font-family="Arial,sans-serif" font-size="12" font-weight="700">NETWORK SETTINGS</text>
+  <rect x="300" y="194" width="360" height="44" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="318" y="221" fill="#e2e8f0" font-family="Arial,sans-serif" font-size="14">DHCP / static address and gateway</text>
+  <text x="300" y="267" fill="#64748b" font-family="Arial,sans-serif" font-size="12" font-weight="700">WEBSOCKET SETTINGS</text>
+  <rect x="300" y="280" width="360" height="42" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="318" y="306" fill="#e2e8f0" font-family="Arial,sans-serif" font-size="14">Arena server IP</text>
+  <rect x="300" y="332" width="360" height="40" rx="8" fill="#20243a" stroke="#373d64"/>
+  <text x="480" y="357" fill="#c7d2fe" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="700">Configure WebSocket Messages</text>
+  <text x="300" y="393" fill="#64748b" font-family="Arial,sans-serif" font-size="12" font-weight="700">DEVICE ROLE</text>
+  <rect x="300" y="402" width="360" height="36" rx="8" fill="#12151f" stroke="#2d3148"/>
+  <text x="318" y="425" fill="#e2e8f0" font-family="Arial,sans-serif" font-size="14">Red Hub</text>
+  <path d="M635 416l7 7 7-7" fill="none" stroke="#94a3b8" stroke-width="2"/>
+  <text x="300" y="460" fill="#64748b" font-family="Arial,sans-serif" font-size="12" font-weight="700">LED CONTROL</text>
+  <rect x="300" y="469" width="360" height="36" rx="8" fill="#20243a" stroke="#373d64"/>
+  <text x="480" y="492" fill="#c7d2fe" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="700">Configure LED Settings</text>
+  <path d="M270 352H165" stroke="#818cf8" stroke-width="2"/>
+  <circle cx="153" cy="352" r="12" fill="#6366f1"/>
+  <text x="153" y="357" fill="white" text-anchor="middle" font-family="Arial,sans-serif" font-size="12">1</text>
+  <text x="26" y="342" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">Credentials &amp;</text>
+  <text x="26" y="361" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">message controls</text>
+  <path d="M690 487H795" stroke="#818cf8" stroke-width="2"/>
+  <circle cx="807" cy="487" r="12" fill="#6366f1"/>
+  <text x="807" y="492" fill="white" text-anchor="middle" font-family="Arial,sans-serif" font-size="12">2</text>
+  <text x="828" y="478" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">LED mode, count,</text>
+  <text x="828" y="497" fill="#c7d2fe" font-family="Arial,sans-serif" font-size="14" font-weight="700">and color order</text>
+</svg>
