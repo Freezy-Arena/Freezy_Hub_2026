@@ -65,8 +65,61 @@ void LedAnimator::_renderMode(LedMode mode) {
         case LED_MODE_BLUE_STARTUP:     _renderStartup(CRGB::Blue);     break;
         case LED_MODE_RED_ADVANTAGE:    _renderAdvantage(CRGB::Red);    break;
         case LED_MODE_BLUE_ADVANTAGE:   _renderAdvantage(CRGB::Blue);   break;
+        case LED_MODE_RAINBOW:          _renderRainbow();               break;
+        case LED_MODE_SIDE_1_TEST:      _renderSideTest(1);             break;
+        case LED_MODE_SIDE_2_TEST:      _renderSideTest(2);             break;
+        case LED_MODE_SIDE_3_TEST:      _renderSideTest(3);             break;
+        case LED_MODE_SIDE_4_TEST:      _renderSideTest(4);             break;
         default:                        _renderSolid(CRGB::Black);      break;
     }
+}
+
+void LedAnimator::_renderRainbow() {
+    const int logicalPixels = NUM_SIDES * NODES_PER_FIXTURE; // 32
+    const int sourcePixels = NUM_SIDES * FIXTURES_PER_SIDE * NODES_PER_FIXTURE; // 64
+    uint16_t ledCount = _leds.getLedCount();
+
+    for (uint16_t i = 0; i < ledCount; i++) {
+        int sourcePixel = ((int)i * sourcePixels) / ledCount;
+        int side = sourcePixel / (FIXTURES_PER_SIDE * NODES_PER_FIXTURE);
+        int pixelInFixture = sourcePixel % NODES_PER_FIXTURE;
+        int logicalPixel = side * NODES_PER_FIXTURE + pixelInFixture;
+        int position = (logicalPixel - (_counter / 2)) % logicalPixels;
+        if (position < 0) position += logicalPixels;
+
+        _leds.setLedRaw(i, _rainbowColor((uint8_t)position));
+    }
+    _leds.show();
+}
+
+CRGB LedAnimator::_rainbowColor(uint8_t position) {
+    const int logicalPixels = NUM_SIDES * NODES_PER_FIXTURE;
+    float hue = ((float)position / (float)logicalPixels) * 6.0f;
+    int segment = (int)hue;
+    float fraction = hue - (float)segment;
+    uint8_t q = (uint8_t)(255.0f * (1.0f - fraction));
+    uint8_t t = (uint8_t)(255.0f * fraction);
+
+    switch (segment % 6) {
+        case 0: return CRGB(255, t, 0);
+        case 1: return CRGB(q, 255, 0);
+        case 2: return CRGB(0, 255, t);
+        case 3: return CRGB(0, q, 255);
+        case 4: return CRGB(t, 0, 255);
+        default: return CRGB(255, 0, q);
+    }
+}
+
+void LedAnimator::_renderSideTest(uint8_t side) {
+    uint16_t ledCount = _leds.getLedCount();
+    uint16_t start = ((uint32_t)(side - 1) * ledCount) / NUM_SIDES;
+    uint16_t end = ((uint32_t)side * ledCount) / NUM_SIDES;
+    CRGB color = (_role.getRole() == ROLE_RED_HUB) ? CRGB::Red : CRGB::Blue;
+
+    for (uint16_t i = 0; i < ledCount; i++) {
+        _leds.setLedRaw(i, (i >= start && i < end) ? color : CRGB::Black);
+    }
+    _leds.show();
 }
 
 // ─── Solid ────────────────────────────────────────────────────────────────────

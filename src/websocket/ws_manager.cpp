@@ -389,7 +389,7 @@ void WsManager::_handleLedStatus(JsonObject data) {
 
     int redMode = redModeValue.as<int>();
     int blueMode = blueModeValue.as<int>();
-    if (redMode < 0 || redMode > 11 || blueMode < 0 || blueMode > 11) {
+    if (redMode < 0 || redMode > 16 || blueMode < 0 || blueMode > 16) {
         Serial.printf("[WS] ledStatus ignored: invalid modes RedMode=%d BlueMode=%d\n",
                       redMode, blueMode);
         return;
