@@ -14,8 +14,8 @@ void LedManager::begin() {
     }
     controller->setCorrection(TypicalLEDStrip);
     FastLED.setBrightness(_brightness);
+    _dirty = true;  // Push the initial off frame even when the buffer starts zeroed.
     clear();
-    FastLED.show();
     Serial.printf("[LED] Initialized with %u LEDs, color order %s\n",
                   _ledCount, getColorOrderName());
 }
@@ -26,48 +26,65 @@ void LedManager::update() {
 }
 
 void LedManager::setLedRaw(uint16_t index, CRGB color) {
-    if (index < _ledCount) {
+    if (index < _ledCount && _leds[index] != color) {
         _leds[index] = color;
+        _dirty = true;
     }
 }
 
 void LedManager::show() {
+    if (!_dirty) return;
     FastLED.show();
+    _dirty = false;
 }
 
 void LedManager::setAll(CRGB color) {
-    fill_solid(_leds, _ledCount, color);
-    if (_ledCount < LED_MAX_LEDS) {
-        fill_solid(_leds + _ledCount, LED_MAX_LEDS - _ledCount, CRGB::Black);
+    for (uint16_t i = 0; i < LED_MAX_LEDS; i++) {
+        CRGB next = i < _ledCount ? color : CRGB::Black;
+        if (_leds[i] != next) {
+            _leds[i] = next;
+            _dirty = true;
+        }
     }
-    FastLED.show();
+    show();
 }
 
 void LedManager::setLed(uint16_t index, CRGB color) {
-    if (index < _ledCount) {
-        _leds[index] = color;
-        FastLED.show();
-    }
+    setLedRaw(index, color);
+    show();
 }
 
 void LedManager::clear() {
-    fill_solid(_leds, LED_MAX_LEDS, CRGB::Black);
-    FastLED.show();
+    for (uint16_t i = 0; i < LED_MAX_LEDS; i++) {
+        if (_leds[i] != CRGB::Black) {
+            _leds[i] = CRGB::Black;
+            _dirty = true;
+        }
+    }
+    show();
 }
 
 void LedManager::setBrightness(uint8_t brightness) {
+    if (_brightness == brightness) return;
     _brightness = brightness;
     FastLED.setBrightness(_brightness);
     FastLED.show();
 }
 
 void LedManager::showRainbow(uint8_t deltaHue) {
-    fill_rainbow(_leds, _ledCount, _rainbowHue, deltaHue);
+    CRGB frame[LED_MAX_LEDS];
+    fill_rainbow(frame, _ledCount, _rainbowHue, deltaHue);
     if (_ledCount < LED_MAX_LEDS) {
-        fill_solid(_leds + _ledCount, LED_MAX_LEDS - _ledCount, CRGB::Black);
+        fill_solid(frame + _ledCount, LED_MAX_LEDS - _ledCount, CRGB::Black);
+    }
+    for (uint16_t i = 0; i < LED_MAX_LEDS; i++) {
+        if (_leds[i] != frame[i]) {
+            _leds[i] = frame[i];
+            _dirty = true;
+        }
     }
     _rainbowHue++;
-    FastLED.show();
+    show();
 }
 
 void LedManager::showSolid(CRGB color) {
@@ -80,9 +97,11 @@ void LedManager::showChase(CRGB color, uint16_t speed) {
 
     if (_ledCount == 0) return;
 
-    clear();
-    _leds[_chasePos % _ledCount] = color;
-    FastLED.show();
+    for (uint16_t i = 0; i < _ledCount; i++) {
+        setLedRaw(i, CRGB::Black);
+    }
+    setLedRaw(_chasePos % _ledCount, color);
+    show();
     _chasePos++;
 }
 

@@ -54,4 +54,5 @@ private:
     uint32_t _lastUpdate = 0;
     uint16_t _chasePos = 0;
     uint8_t _rainbowHue = 0;
+    bool _dirty = false;
 };
