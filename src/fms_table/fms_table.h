@@ -3,12 +3,14 @@
 #include "stop_policy.h"
 #include "../network/network_manager.h"
 #include "../led/led_manager.h"
+#include "../websocket/ws_manager.h"
 
 class FmsTable {
 public:
     // Immutable destination for this boot; configuration changes require reboot.
     void begin(const String& host, uint16_t port, EthManager& network);
     void update(LedManager& leds, uint32_t wsMessages);
+    void serviceStops(WsManager& ws); // Main-loop owner of WebSocket delivery.
 private:
     static void sampleTask(void* self);
     static void deliveryTask(void* self);
@@ -23,6 +25,7 @@ private:
     struct Status {
         uint32_t sampleGapUs = 0, httpMaxMs = 0, ackMaxMs = 0;
         uint32_t httpCount = 0, failures = 0, retries = 0, acks = 0;
+        uint32_t stopSent = 0, stopFailures = 0, stopRoundTripMs = 0;
         uint32_t startSent = 0, startRejected = 0, startFailed = 0;
         uint32_t stackVersion = 0;
         int lastHttp = 0;
@@ -30,6 +33,14 @@ private:
         bool red = false, blue = false, orange = false, green = false;
     } _status;
     bool _startPending = false;
+    // Protected by _mux: sampled by input task / read by HTTP start worker.
+    bool _stopConnected = false, _stopReady = false;
+    // Main-loop only: no WebSocketsClient access from either background task.
+    bool _inFlight = false, _flightQueued = false, _flightFault = false, _flightState = false;
+    fms::Transition _flightEvent;
+    uint32_t _sentAt = 0, _nextStop = 0, _lastRefresh = 0, _lastAssertAck = 0;
+    uint8_t _stopFailures = 0;
+    bool _asserted = false;
     uint32_t _startAt = 0, _lastSampleUs = 0;
     bool _sampleSeen = false;
     uint32_t _lastReport = 0, _lastHeartbeat = 0, _stackVersion = 0;

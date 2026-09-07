@@ -1,7 +1,7 @@
 # ESP32-S3 FRC Arena Hub Controller
 
 > [!WARNING]
-> **This is a test branch for ESP32 arena controllers.** `FMS_TABLE` requires the Freezy arena HTTP extensions documented below. Do not assume upstream [Team 254's Cheesy Arena](https://github.com/Team254/cheesy-arena) supports those endpoints or the `setRegisters`/`setInput` extensions.
+> **This is a test branch for ESP32 arena controllers.** `FMS_TABLE` requires the Freezy arena WebSocket input and HTTP start/stack extensions documented below. Do not assume upstream [Team 254's Cheesy Arena](https://github.com/Team254/cheesy-arena) supports those endpoints or the `setRegisters`/`setInput` extensions.
 
 Firmware for an ESP32-S3 that connects physical FRC hub hardware to a Cheesy Arena server. It reads four hardware counters, reports PLC registers and inputs, responds to PLC coils, controls relays, and drives WS2812B LEDs from coils, DMX, or arena WebSocket modes.
 
@@ -134,11 +134,11 @@ For side-test modes, the configured LED count is divided into four contiguous se
 
 Role-specific registers, coils, inputs, counters, and relay pins are defined in `src/role_config.h`.
 
-`FMS_TABLE` uses GPIO 33 for field stop (HTTP channel 0), GPIO 34 for start,
+`FMS_TABLE` uses GPIO 33 for field stop (acknowledged WebSocket `setInput`, channel 0), GPIO 34 for start,
 and GPIO 47 for its original stack-light layout. It does not initialize hub
 relays/counters or send hub telemetry. See [FMS_TABLE migration](docs/FMS_TABLE.md)
 for polarity, retained transitions, retries, overflow, settings, and bench tests.
-It requires the inspected Freezy arena HTTP extensions; upstream compatibility
+It requires the inspected Freezy arena WebSocket and HTTP extensions; upstream compatibility
 must not be inferred from the hub LED support.
 
 ## WebSocket protocol

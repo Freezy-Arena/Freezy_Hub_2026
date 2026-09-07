@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import socket
+import select
 import struct
 import threading
 import time
@@ -19,7 +20,7 @@ class BenchServer(ThreadingHTTPServer):
         self.log_path = log_path
         self.events = []
         self.controls = dict(delay_ms=0, fail_stops=0, drop_stop_responses=0,
-                             notifications_hz=50, redStackLight=True,
+                             notifications_hz=50, stop_ack_delay_ms=0, invalid_stop_acks=0, redStackLight=True,
                              blueStackLight=False, orangeStackLight=False,
                              greenStackLight=False)
 
@@ -129,23 +130,82 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Sec-WebSocket-Accept", accept)
         self.end_headers()
         self.server.record(path=self.path, connected=True)
+        # One loop owns socket writes. Delayed ACKs do not block notifications.
+        # Resetting this connection discards its delayed ACKs, as in real TCP.
+        self.connection.settimeout(2)
+        pending = []
+        next_notify = 0
         try:
             while True:
+                now = time.monotonic()
                 with self.server.lock:
                     hz = self.server.controls["notifications_hz"]
-                if hz > 0:
-                    # arenaStatus is injected deliberately as a stress case;
-                    # the inspected production PLC route only sends PLC/LED.
+                if hz > 0 and now >= next_notify:
                     for message in (
                         dict(type="plcIoChange", data=dict(Coils=[False] * 32, Registers=[0] * 32)),
                         dict(type="arenaStatus", data=dict(MatchState=0)),
                         dict(type="setLedMode", data=dict(RedMode=1, BlueMode=2)),
                     ):
                         self.wfile.write(frame(message))
-                    self.wfile.flush()
-                time.sleep(1 / max(1, hz))
-        except (OSError, ValueError):
+                    next_notify = now + 1 / hz
+                for deadline, message in list(pending):
+                    if now >= deadline:
+                        self.wfile.write(frame(message))
+                        pending.remove((deadline, message))
+                readable, _, _ = select.select([self.connection], [], [], .002)
+                if not readable:
+                    continue
+                header = self.rfile.read(2)
+                if len(header) != 2:
+                    break
+                opcode, length = header[0] & 15, header[1] & 127
+                if opcode == 8:
+                    break
+                if length == 126:
+                    length = struct.unpack("!H", self.rfile.read(2))[0]
+                elif length == 127:
+                    length = struct.unpack("!Q", self.rfile.read(8))[0]
+                if length > 16384 or not header[1] & 128:
+                    break
+                mask = self.rfile.read(4)
+                payload = self.rfile.read(length)
+                if len(mask) != 4 or len(payload) != length:
+                    break
+                payload = bytes(byte ^ mask[i % 4] for i, byte in enumerate(payload))
+                if opcode == 9:
+                    self.wfile.write(bytes([0x8a, len(payload)]) + payload)
+                    continue
+                if opcode != 1:
+                    continue
+                message = json.loads(payload)
+                if message.get("type") != "setInput":
+                    self.wfile.write(frame(dict(type="error", data="Unknown message")))
+                    continue
+                data = message.get("data")
+                if (not isinstance(data, list) or len(data) != 1 or
+                    not isinstance(data[0], dict) or data[0].get("channel") != 0 or
+                    type(data[0].get("state")) is not bool):
+                    self.wfile.write(frame(dict(type="error", data="Invalid table mapping")))
+                    continue
+                with self.server.lock:
+                    options = self.server.controls.copy()
+                    fail = options["fail_stops"] > 0
+                    drop = not fail and options["drop_stop_responses"] > 0
+                    invalid = not fail and not drop and options["invalid_stop_acks"] > 0
+                    key = "fail_stops" if fail else "drop_stop_responses" if drop else "invalid_stop_acks" if invalid else None
+                    if key:
+                        self.server.controls[key] -= 1
+                self.server.record(path=self.path, type="setInput", data=data,
+                                   applied=not fail, dropped_response=drop, invalid_ack=invalid)
+                if not drop:
+                    reply = dict(type="error", data="Unavailable") if fail else dict(
+                        type="plcInputSetSuccess", data=dict(success=True, count=2 if invalid else 1))
+                    pending.append((time.monotonic() + max(0, options["stop_ack_delay_ms"]) / 1000, reply))
+        except (OSError, ValueError, struct.error):
+            pass
+        finally:
             self.close_connection = True
+
 
 
 if __name__ == "__main__":

@@ -10,9 +10,6 @@ constexpr uint32_t RefreshMs = 100;
 constexpr uint32_t StopHoldMs = 100;
 constexpr uint32_t StartExpiryMs = 500;
 constexpr bool wireState(bool gpioHigh) { return !gpioHigh; }
-constexpr bool stopAcknowledged(int status, bool expectedBody) {
-    return status == 200 && expectedBody;
-}
 constexpr uint32_t retryDelay(uint8_t failures) {
     return failures >= 5 ? 1000 : (50u << (failures ? failures - 1 : 0));
 }

@@ -79,8 +79,16 @@ void WsManager::update() {
     if (_lastUpdate) _wsGap = max(_wsGap, uint32_t(now - _lastUpdate));
     _lastUpdate = now;
     _ws.loop();
+    if (_fmsTable) {
+        _inputAck.expire(millis());
+        if (_inputAck.resetRequired) {
+            _ws.disconnect();
+            _connected = false;
+            _inputAck.disconnected();
+        }
+    }
     _wsWork = max(_wsWork, uint32_t(millis() - now));
-    if (_fmsTable && uint32_t(now - _lastReport) >= 5000) {
+    if (_debugSerial && _fmsTable && uint32_t(now - _lastReport) >= 5000) {
         _lastReport = now;
         Serial.printf("[WS TIMING] gap_ms=%lu work_ms=%lu messages=%lu arena=%lu plc=%lu parse_errors=%lu disconnects=%lu\n",
             _wsGap, _wsWork, _messages, _arenaMessages, _plcMessages, _parseErrors, _disconnects);
@@ -167,6 +175,7 @@ void WsManager::_sendJson(const String& type, JsonDocument& doc) {
 }
 
 void WsManager::sendInputs(const bool* states, uint8_t count) {
+    if (_fmsTable) return; // Only the acknowledged stop path may write FMS inputs.
     if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
@@ -182,6 +191,7 @@ void WsManager::sendInputs(const bool* states, uint8_t count) {
     _sendJson("setInput", doc);
 }
 void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel version for testing
+    if (_fmsTable) return;
     if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
@@ -193,6 +203,22 @@ void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel
     o["state"] = state;
 
     _sendJson("setInput", doc);
+}
+
+bool WsManager::sendStopInput(bool state) {
+    if (!_fmsTable || !_connected || !_inputAck.begin(millis())) return false;
+    String frame = state
+        ? "{\"type\":\"setInput\",\"data\":[{\"channel\":0,\"state\":true}]}"
+        : "{\"type\":\"setInput\",\"data\":[{\"channel\":0,\"state\":false}]}";
+    if (!_ws.sendTXT(frame)) {
+        _inputAck.reply(false);
+        _ws.disconnect();
+        _connected = false;
+        _inputAck.disconnected();
+    }
+    // Accepted for tracking; a failed/partial write is consumed as Failed,
+    // never treated as an acknowledgment of remote application.
+    return true;
 }
 
 void WsManager::sendCounters(int64_t ch0, int64_t ch1,
@@ -280,14 +306,21 @@ void WsManager::_handleMessage(const String& raw) {
     } else if (type == "arenaStatus") {
         ++_arenaMessages;
         WS_LOG("[WS] ← arenaStatus received\n");
+    } else if (type == "plcInputSetSuccess") {
+        if (_fmsTable) {
+            bool valid = InputAck::valid(data["success"].is<bool>(), data["success"].as<bool>(),
+                                         data["count"].is<int>(), data["count"].as<int>());
+            _inputAck.reply(valid);
+        }
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
         WS_LOG("[WS] ← Register set ACK");
     } else if (type == "setLedMode") {
         _handleSetLedMode(data);
     } else if (type == "ping") {
-        Serial.printf("[WS] ← Ping received");
+        WS_LOG("[WS] ← Ping received\n");
     } else if (type == "error") {
+        if (_fmsTable) _inputAck.reply(false);
         Serial.printf("[WS] ← Server error: %s\n",
                       doc["data"].as<String>().c_str());
     } else {
@@ -306,6 +339,7 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
             break;
 
         case WStype_DISCONNECTED:
+            _inputAck.disconnected();
             ++_disconnects;
             _connected = false;
             _receivingTextFragment = false;
@@ -412,7 +446,7 @@ void WsManager::_handleSetLedMode(JsonObject data) {
         return;
     }
 
-    Serial.printf("[WS] ← setLedMode received: RedMode=%d BlueMode=%d\n",
+    WS_LOG("[WS] ← setLedMode received: RedMode=%d BlueMode=%d\n",
                   redMode, blueMode);
 
     if (_ledModeCb) _ledModeCb(redMode, blueMode);

@@ -1,5 +1,7 @@
 #include "led_animator.h"
 
+extern bool _debugSerial;
+
 // Fill directions — mirrors strip.go
 #define FILL_CENTER_OUT     0
 #define FILL_LEFT_TO_RIGHT  1
@@ -30,7 +32,7 @@ void LedAnimator::setMode(LedMode redMode, LedMode blueMode) {
 
     if (newMode != current) {
         _counter = 0;   // Reset counter on mode change, mirrors Go behaviour
-        Serial.printf("[ANIM] Mode changed to %d\n", newMode);
+        if (_debugSerial) Serial.printf("[ANIM] Mode changed to %d\n", newMode);
     }
 
     _redMode  = redMode;

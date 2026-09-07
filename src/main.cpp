@@ -24,7 +24,7 @@ LedAnimator     ledAnimator(leds, roleManager);
 FmsTable        fmsTable;
 bool            isFmsTable = false; // Hardware role stays fixed until reboot.
 
-#define DEBUG_SERIAL false           // Set false to silence all Serial output
+#define DEBUG_SERIAL false           // Routine debug only; keep summaries, connection events, and errors.
 bool _debugSerial = DEBUG_SERIAL;
 
 // ─── Coil callback ────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 
     // Match reset → clear all counters
     if (coilActive(COIL_MATCH_RESET)) {
-        Serial.println("[MAIN] Match reset → clearing counters");
+        WS_PRINTLN("[MAIN] Match reset → clearing counters");
         counters.resetAll();
     }
 
@@ -75,7 +75,7 @@ void onSetLedMode(int redMode, int blueMode) {
     if (isFmsTable) return;
     if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
 
-    Serial.printf("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
+    WS_LOG("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
                   redMode, blueMode);
 
     ledAnimator.setMode(static_cast<LedMode>(redMode),
@@ -128,6 +128,7 @@ void loop()
     network.update();
     ws.setLedModeEnabled(!isFmsTable && network.ledControlMode == LED_CONTROL_WEBSOCKET);
     ws.update();                    // Must be called every loop
+    if (isFmsTable) fmsTable.serviceStops(ws);
     web.update();               // Handles pending reboot
 
     if (isFmsTable) {
@@ -178,9 +179,9 @@ void loop()
     }
   
 
-    // Print count every 2 seconds
+    // Keep the status summary every 5 seconds, even with debug disabled.
     static uint32_t lastPrint = 0;
-    if (millis() - lastPrint >= 2000) {
+    if (millis() - lastPrint >= 5000) {
         lastPrint = millis();
         Serial.printf("[STATUS] Role:%s  Ch0:%lld Ch1:%lld Ch2:%lld Ch3:%lld | Relay:%s | WS:%s\n",
                       roleManager.getRoleName().c_str(),

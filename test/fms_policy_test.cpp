@@ -1,6 +1,7 @@
 // Compile-time behavioral tests: run with any C++14 compiler, including the
 // installed ESP32 toolchain (-std=c++14 -fsyntax-only). No hardware required.
 #include "../src/fms_table/stop_policy.h"
+#include "../src/websocket/input_ack.h"
 using namespace fms;
 
 constexpr bool rapidTransitionsAndOutage() {
@@ -64,9 +65,37 @@ static_assert(rapidTransitionsAndOutage(), "Ordered transitions retained through
 static_assert(queueWrapAndOverflow(), "Overflow latches and freezes retained history");
 static_assert(heldAndBouncingStart(), "One start per debounced release/press");
 static_assert(rolloverAndSteadyInput(), "Clock rollover and no duplicate steady samples");
-static_assert(stopAcknowledged(200, true) && !stopAcknowledged(200, false)
-    && !stopAcknowledged(503, true) && !stopAcknowledged(-1, true)
-    && !stopAcknowledged(302, true), "Only verified stop ACK retires history");
+constexpr bool websocketAcknowledgments() {
+    InputAck ack;
+    ack.reply(true); // Unsolicited ACK cannot change idle state.
+    if (ack.take() != InputReply::Idle || !ack.begin(100)) return false;
+    if (ack.begin(101) || ack.take() != InputReply::Pending) return false;
+    ack.expire(599);
+    if (ack.take() != InputReply::Pending) return false;
+    ack.expire(600);
+    ack.reply(true); // A late ACK after timeout cannot turn failure into success.
+    if (!ack.resetRequired || ack.take() != InputReply::Failed || ack.begin(601)) return false;
+    ack.disconnected();
+    if (ack.take() != InputReply::Failed || !ack.begin(700)) return false;
+    ack.reply(true);
+    if (ack.take() != InputReply::Success || ack.take() != InputReply::Idle) return false;
+    if (!ack.begin(800)) return false;
+    ack.reply(false); // Invalid count/success/error requires a fresh connection.
+    if (!ack.resetRequired || ack.begin(801)) return false;
+    ack.disconnected();
+    if (ack.take() != InputReply::Failed || !ack.begin(900)) return false;
+    ack.disconnected(); // Disconnect before ACK retains head in delivery policy.
+    if (ack.take() != InputReply::Failed || !ack.begin(0xfffffff0u)) return false;
+    ack.expire(484u); // Timeout across millis rollover.
+    return ack.resetRequired && ack.take() == InputReply::Failed;
+}
+static_assert(websocketAcknowledgments(), "One request in flight, validated ACK, reset before ambiguous retry");
+static_assert(InputAck::valid(true, true, true, 1)
+    && !InputAck::valid(false, true, true, 1)
+    && !InputAck::valid(true, false, true, 1)
+    && !InputAck::valid(true, true, false, 1)
+    && !InputAck::valid(true, true, true, 0)
+    && !InputAck::valid(true, true, true, 2), "Only typed success=true and count=1 acknowledge an input");
 static_assert(retryDelay(1) == 50 && retryDelay(2) == 100 && retryDelay(3) == 200
     && retryDelay(4) == 400 && retryDelay(5) == 1000 && retryDelay(255) == 1000, "Bounded backoff");
 static_assert(startExpired(100, 100, false) && startExpired(601, 100, true)

@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include "../role_config.h"
+#include "input_ack.h"
 
 // Mirrors the Python register map
 // Counter channel → PLC register
@@ -39,6 +40,9 @@ public:
     bool isConnected();
     void configureFmsTable(bool enabled) { _fmsTable = enabled; }
     uint32_t messageCount() const { return _messages; }
+    // Main-loop only. FMS stop writes bypass the optional hub telemetry flag.
+    bool sendStopInput(bool state);
+    InputReply takeStopReply() { return _inputAck.take(); }
 
     // Send input states 
     void sendInputs(const bool* states, uint8_t count);
@@ -74,6 +78,7 @@ private:
     CoilCallback        _coilCb     = nullptr;
     Preferences         _prefs;
     bool _fmsTable = false;
+    InputAck _inputAck;
     uint32_t _messages = 0, _arenaMessages = 0, _plcMessages = 0, _parseErrors = 0;
     uint32_t _disconnects = 0, _wsGap = 0, _wsWork = 0, _lastUpdate = 0, _lastReport = 0;
 
