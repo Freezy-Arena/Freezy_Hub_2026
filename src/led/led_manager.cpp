@@ -34,7 +34,22 @@ void LedManager::setLedRaw(uint16_t index, CRGB color) {
 
 void LedManager::show() {
     if (!_dirty) return;
+    // Compare the completed frame: animations may change pixels and then
+    // restore them while rendering, leaving the final output unchanged.
+    bool changed = !_hasShown || _brightness != _lastShownBrightness;
+    for (uint16_t i = 0; !changed && i < LED_MAX_LEDS; i++) {
+        changed = _leds[i] != _lastShown[i];
+    }
+    if (!changed) {
+        _dirty = false;
+        return;
+    }
     FastLED.show();
+    for (uint16_t i = 0; i < LED_MAX_LEDS; i++) {
+        _lastShown[i] = _leds[i];
+    }
+    _lastShownBrightness = _brightness;
+    _hasShown = true;
     _dirty = false;
 }
 
@@ -68,7 +83,8 @@ void LedManager::setBrightness(uint8_t brightness) {
     if (_brightness == brightness) return;
     _brightness = brightness;
     FastLED.setBrightness(_brightness);
-    FastLED.show();
+    _dirty = true;
+    show();
 }
 
 void LedManager::showRainbow(uint8_t deltaHue) {

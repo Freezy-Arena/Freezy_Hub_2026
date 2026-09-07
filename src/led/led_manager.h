@@ -47,6 +47,9 @@ public:
 
 private:
     CRGB _leds[LED_MAX_LEDS];
+    CRGB _lastShown[LED_MAX_LEDS];
+    uint8_t _lastShownBrightness = 0;
+    bool _hasShown = false;
     Preferences _prefs;
     uint16_t _ledCount = LED_DEFAULT_COUNT;
     LedColorOrder _colorOrder = LED_ORDER_BRG;
