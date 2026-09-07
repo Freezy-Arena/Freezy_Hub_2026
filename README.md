@@ -1,7 +1,7 @@
 # ESP32-S3 FRC Arena Hub Controller
 
 > [!WARNING]
-> **This is a test branch for ESP32 and Hub light control.** It is intended to work only with [Team 254's Cheesy Arena](https://github.com/Team254/cheesy-arena). Hub light control is supported, but `setRegisters` and `setInput` messages do **not** work with that arena.
+> **This is a test branch for ESP32 arena controllers.** `FMS_TABLE` requires the Freezy arena HTTP extensions documented below. Do not assume upstream [Team 254's Cheesy Arena](https://github.com/Team254/cheesy-arena) supports those endpoints or the `setRegisters`/`setInput` extensions.
 
 Firmware for an ESP32-S3 that connects physical FRC hub hardware to a Cheesy Arena server. It reads four hardware counters, reports PLC registers and inputs, responds to PLC coils, controls relays, and drives WS2812B LEDs from coils, DMX, or arena WebSocket modes.
 
@@ -9,6 +9,7 @@ Firmware for an ESP32-S3 that connects physical FRC hub hardware to a Cheesy Are
 
 - Four overflow-safe ESP32 PCNT counter channels with 64-bit accumulation
 - Red Hub and Blue Hub roles with separate PLC mappings
+- FMS_TABLE role with dedicated stop sampling/delivery and legacy settings migration; see [protocol comparison and bench tests](docs/FMS_TABLE.md)
 - W5500 wired Ethernet with DHCP or static addressing
 - Arena WebSocket client with automatic reconnect
 - Form login and `session_token` cookie authentication for protected arena pages
@@ -48,8 +49,8 @@ After boot, the serial console prints the assigned IP address. Open `http://<dev
 The main page configures:
 
 - DHCP or a static IP address and gateway
-- Arena WebSocket server IP
-- Device role: `redHub` or `blueHub`
+- Arena server IP and port, shared by WebSocket and FMS Table HTTP
+- Device role: `redHub`, `blueHub`, or `FMS_TABLE`
 - Links to the WebSocket and LED settings pages
 
 Saving the main page restarts the controller.
@@ -133,12 +134,19 @@ For side-test modes, the configured LED count is divided into four contiguous se
 
 Role-specific registers, coils, inputs, counters, and relay pins are defined in `src/role_config.h`.
 
+`FMS_TABLE` uses GPIO 33 for field stop (HTTP channel 0), GPIO 34 for start,
+and GPIO 47 for its original stack-light layout. It does not initialize hub
+relays/counters or send hub telemetry. See [FMS_TABLE migration](docs/FMS_TABLE.md)
+for polarity, retained transitions, retries, overflow, settings, and bench tests.
+It requires the inspected Freezy arena HTTP extensions; upstream compatibility
+must not be inferred from the hub LED support.
+
 ## WebSocket protocol
 
 The default endpoint is:
 
 ```text
-ws://10.0.100.5:8080/setup/field_testing/websocket
+ws://10.0.100.5:8080/api/plc/websocket
 ```
 
 ### Outbound register update

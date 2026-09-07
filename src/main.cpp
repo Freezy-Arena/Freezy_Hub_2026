@@ -9,6 +9,8 @@
 #include "websocket/input_map.h"
 #include "dmx_led/dmx_led_manager.h"
 #include "led_animator/led_animator.h"
+#include "config/legacy_fms.h"
+#include "fms_table/fms_table.h"
 
 LedManager leds;
 CounterManager counters;
@@ -19,6 +21,8 @@ WsManager       ws;
 WebManager      web(network, roleManager, leds, ws);       // Pass managers so web can read/write prefs
 DmxLedManager   dmxLed(leds, roleManager);
 LedAnimator     ledAnimator(leds, roleManager);
+FmsTable        fmsTable;
+bool            isFmsTable = false; // Hardware role stays fixed until reboot.
 
 #define DEBUG_SERIAL false           // Set false to silence all Serial output
 bool _debugSerial = DEBUG_SERIAL;
@@ -27,6 +31,7 @@ bool _debugSerial = DEBUG_SERIAL;
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
+    if (isFmsTable) return;
     const RoleConfig& role = roleManager.getConfig();
 
     // Safety check — guard against shorter-than-expected coil arrays
@@ -67,6 +72,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 }
 
 void onSetLedMode(int redMode, int blueMode) {
+    if (isFmsTable) return;
     if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
 
     Serial.printf("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
@@ -82,40 +88,53 @@ void setup()
     delay(500);
     Serial.println("[BOOT] Starting...");
 
+    migrateLegacyFmsSettings();
     roleManager.begin();            // Load role before anything that needs it
+    isFmsTable = roleManager.getRole() == ROLE_FMS_TABLE;
+    ws.loadPreferences();
+    if (isFmsTable) fmsTable.begin(ws.arenaHost, ws.arenaPort, network);
 
     const RoleConfig& role = roleManager.getConfig();
 
-    counters.begin();
-    for (uint8_t i = 0; i < 4; i++) {
-        counters.addChannel(i, role.counterPin[i]);
+    if (!isFmsTable) {
+        counters.begin();
+        for (uint8_t i = 0; i < 4; i++) {
+            counters.addChannel(i, role.counterPin[i]);
+        }
+        counters.startTask();                   //must be called after all channels added
+
+        relays.begin();
+        relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
+        relays.addChannel(1, role.relayLight); // Vertical hub motor relay
     }
-    counters.startTask();                   //must be called after all channels added
 
-    relays.begin();
-    relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
-    relays.addChannel(1, role.relayLight); // Vertical hub motor relay
-
-    leds.begin();
+    leds.begin(isFmsTable);
     ledAnimator.begin();
 
-    network.begin();
-    web.begin();                    // Start webserver after network is ready
+    network.begin(isFmsTable);
+    web.begin();                    // Also starts while waiting for Ethernet IP
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
     ws.onSetLedMode(onSetLedMode);
+    ws.configureFmsTable(isFmsTable);
     ws.begin("", 0);                // Empty = use stored prefs
 
-    dmxLed.begin();
+    if (!isFmsTable) dmxLed.begin();
 }
 
 void loop()
 {
     network.update();
-    ws.setLedModeEnabled(network.ledControlMode == LED_CONTROL_WEBSOCKET);
+    ws.setLedModeEnabled(!isFmsTable && network.ledControlMode == LED_CONTROL_WEBSOCKET);
     ws.update();                    // Must be called every loop
     web.update();               // Handles pending reboot
+
+    if (isFmsTable) {
+        fmsTable.update(leds, ws.messageCount());
+        delay(1); // Yield to RTOS; stop sampling has its own higher-priority task.
+        return;   // No hub relay, counter, DMX, or 500 ms input telemetry on table pins.
+    }
 
     LedControlMode ledMode = network.ledControlMode;
 

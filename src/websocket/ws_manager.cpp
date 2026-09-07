@@ -75,7 +75,16 @@ void WsManager::begin(const String& host, uint16_t port, const String& path) {
 // ─── Update (call from loop) ──────────────────────────────────────────────────
 
 void WsManager::update() {
+    uint32_t now = millis();
+    if (_lastUpdate) _wsGap = max(_wsGap, uint32_t(now - _lastUpdate));
+    _lastUpdate = now;
     _ws.loop();
+    _wsWork = max(_wsWork, uint32_t(millis() - now));
+    if (_fmsTable && uint32_t(now - _lastReport) >= 5000) {
+        _lastReport = now;
+        Serial.printf("[WS TIMING] gap_ms=%lu work_ms=%lu messages=%lu arena=%lu plc=%lu parse_errors=%lu disconnects=%lu\n",
+            _wsGap, _wsWork, _messages, _arenaMessages, _plcMessages, _parseErrors, _disconnects);
+    }
 }
 
 // ─── Connection state ─────────────────────────────────────────────────────────
@@ -222,8 +231,9 @@ void WsManager::_handleCoilChange(JsonObject data) {
         return;
     }
 
+    if (coilArr.size() > 128) { ++_parseErrors; return; }
     uint8_t count = coilArr.size();
-    bool coils[count];
+    bool coils[128];
     for (uint8_t i = 0; i < count; i++) {
         coils[i] = coilArr[i].as<bool>();
     }
@@ -243,10 +253,13 @@ void WsManager::_handleMessage(const String& raw) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, raw);
     if (err) {
+        ++_parseErrors;
         WS_LOG("[WS] JSON parse error: %s\n", err.c_str());
         return;
     }
 
+    if (!doc["type"].is<const char*>()) { ++_parseErrors; return; }
+    ++_messages;
     String type = doc["type"].as<String>();
     JsonObject data = doc["data"].as<JsonObject>();
 
@@ -261,9 +274,11 @@ void WsManager::_handleMessage(const String& raw) {
     }
 
     if (type == "plcIoChange") {
+        ++_plcMessages;
         WS_LOG("[WS] ← plcIoChange received\n");
         _handleCoilChange(data);
     } else if (type == "arenaStatus") {
+        ++_arenaMessages;
         WS_LOG("[WS] ← arenaStatus received\n");
     } else if (type == "plcRegisterSetSuccess") {
         WS_LOG("[WS] ← Unhandled type: %s\n", type.c_str());
@@ -291,6 +306,7 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
             break;
 
         case WStype_DISCONNECTED:
+            ++_disconnects;
             _connected = false;
             _receivingTextFragment = false;
             _fragmentBuffer = "";
@@ -304,7 +320,9 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
                 bool authenticationRequired =
                     reason.indexOf("HTTP 401") >= 0 ||
                     reason.indexOf("HTTP 307") >= 0;
-                if (!_usingSessionAuth && authenticationRequired) {
+                // FMS uses the inspected public /api/plc/websocket endpoint.
+                // Never run synchronous login HTTP in its WebSocket callback.
+                if (!_fmsTable && !_usingSessionAuth && authenticationRequired) {
                     Serial.println("[WS] Authentication required; requesting session cookie");
                     _authenticateWithSession();
                 }
@@ -314,6 +332,7 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
             break;
 
         case WStype_TEXT:
+            if (length > WS_MAX_MESSAGE_SIZE) { ++_parseErrors; break; }
             _handleMessage(String(payload, length));
             break;
 

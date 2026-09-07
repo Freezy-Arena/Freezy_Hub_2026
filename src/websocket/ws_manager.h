@@ -37,6 +37,8 @@ public:
     void setLedModeEnabled(bool enabled);
     
     bool isConnected();
+    void configureFmsTable(bool enabled) { _fmsTable = enabled; }
+    uint32_t messageCount() const { return _messages; }
 
     // Send input states 
     void sendInputs(const bool* states, uint8_t count);
@@ -71,6 +73,9 @@ private:
     String              _fragmentBuffer;
     CoilCallback        _coilCb     = nullptr;
     Preferences         _prefs;
+    bool _fmsTable = false;
+    uint32_t _messages = 0, _arenaMessages = 0, _plcMessages = 0, _parseErrors = 0;
+    uint32_t _disconnects = 0, _wsGap = 0, _wsWork = 0, _lastUpdate = 0, _lastReport = 0;
 
     void _onEvent(WStype_t type, uint8_t* payload, size_t length);
     bool _appendTextFragment(const uint8_t* payload, size_t length);

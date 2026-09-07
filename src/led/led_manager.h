@@ -4,7 +4,7 @@
 
 #define LED_PIN     38
 #define LED_DEFAULT_COUNT 125
-#define LED_MAX_LEDS      300
+#define LED_MAX_LEDS      750
 #define LED_TYPE    WS2812B
 #define LED_PREFS_NS "leds"
 
@@ -19,7 +19,7 @@ enum LedColorOrder : uint8_t {
 
 class LedManager {
 public:
-    void begin();
+    void begin(bool fmsTable = false);
     void update();
     void setLedRaw(uint16_t index, CRGB color);  // Set without calling show()
     void show();  
@@ -52,6 +52,7 @@ private:
     bool _hasShown = false;
     Preferences _prefs;
     uint16_t _ledCount = LED_DEFAULT_COUNT;
+    uint16_t _outputCount = 300;
     LedColorOrder _colorOrder = LED_ORDER_BRG;
     uint8_t _brightness = 128;
     uint32_t _lastUpdate = 0;

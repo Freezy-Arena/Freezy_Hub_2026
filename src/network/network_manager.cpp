@@ -1,6 +1,6 @@
 #include "network_manager.h"
 
-bool EthManager::_connected = false;
+std::atomic<bool> EthManager::_connected{false};
 
 void EthManager::_onEvent(arduino_event_id_t event, arduino_event_info_t info)
 {
@@ -60,14 +60,14 @@ void EthManager::savePreferences()
     Serial.println("[NET] Prefs saved");
 }
 
-void EthManager::begin() {
+void EthManager::begin(bool fmsTable) {
     loadPreferences();
 
     Network.onEvent(_onEvent);
 
     ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR,
               ETH_PHY_CS, ETH_PHY_IRQ, ETH_PHY_RST,
-              ETH_PHY_SPI_HOST,
+              fmsTable ? SPI2_HOST : ETH_PHY_SPI_HOST,
               ETH_PHY_SPI_SCK, ETH_PHY_SPI_MISO, ETH_PHY_SPI_MOSI);
 
     if (!useDHCP) {
@@ -83,12 +83,8 @@ void EthManager::begin() {
         }
     }
 
-    Serial.print("[NET] Waiting for ethernet");
-    while (!_connected) {
-        Serial.print(".");
-        delay(500);
-    }
-    Serial.println();
+    // IP acquisition is asynchronous. Inputs and WebSockets must keep running
+    // when the cable is absent at boot.
 
     // Full connection summary
     Serial.println("[NET] ================================");

@@ -208,8 +208,10 @@ String WebManager::_buildPage(const String& message) {
       <hr class="divider">
       <h2>WebSocket Settings</h2>
       <div class="field">
-        <label>WebSocket Server IP</label>
+        <label>Arena Server IP (WebSocket and FMS HTTP)</label>
         <input type="text" name="wsHost" value=")" + wsHost + R"(" placeholder="10.0.100.5">
+        <label>Arena Server Port</label>
+        <input type="number" name="wsPort" min="1" max="65535" value=")" + String(_ws.arenaPort) + R"(">
       </div>
       <a class="nav-link" href="/websocket">Configure WebSocket Messages</a>
 
@@ -222,6 +224,8 @@ String WebManager::_buildPage(const String& message) {
     + String(_role.getRoleName() == "redHub"  ? "selected" : "") + R"(>Red Hub</option>
           <option value="blueHub" )"
     + String(_role.getRoleName() == "blueHub" ? "selected" : "") + R"(>Blue Hub</option>
+          <option value="FMS_TABLE" )"
+    + String(_role.getRoleName() == "FMS_TABLE" ? "selected" : "") + R"(>FMS Table</option>
         </select>
       </div>
 
@@ -432,10 +436,18 @@ void WebManager::_setupRoutes() {
     });
 
     _server.on("/led", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        if (_role.getRole() == ROLE_FMS_TABLE) {
+            req->send(200, "text/html", "<h1>FMS Table LEDs</h1><p>Stack lights and status indicators use the table wiring: GPIO 47, GRB, 750 LEDs, brightness 15, 900 mW power limit.</p><p><a href='/'>Back to configuration</a></p>");
+            return;
+        }
         req->send(200, "text/html", _buildLedPage());
     });
 
     _server.on("/led/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        if (_role.getRole() == ROLE_FMS_TABLE) {
+            req->send(400, "text/plain", "FMS Table uses its fixed stack-light layout.");
+            return;
+        }
         int mode = req->hasParam("ledControl", true)
             ? req->getParam("ledControl", true)->value().toInt() : -1;
         int count = req->hasParam("ledCount", true)
@@ -497,48 +509,32 @@ void WebManager::_setupRoutes() {
     // POST /save — save and reboot
     _server.on("/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
 
-        // DHCP checkbox — only present in POST if checked
-        _eth.useDHCP = req->hasParam("useDHCP", true);
-
-        if (!_eth.useDHCP) {
-            if (req->hasParam("staticIP", true))
-                _eth.staticIP = req->getParam("staticIP", true)->value();
-            if (req->hasParam("staticGW", true))
-                _eth.staticGW = req->getParam("staticGW", true)->value();
-
-            // Basic validation
-            IPAddress testIP, testGW;
-            if (!testIP.fromString(_eth.staticIP) ||
-                !testGW.fromString(_eth.staticGW)) {
-                req->send(200, "text/html",
-                          _buildPage("ERROR: Invalid IP or Gateway — not saved."));
-                return;
-            }
+        // Validate the entire form before changing persisted settings.
+        auto value = [&](const char* key, const String& fallback) -> String {
+            return req->hasParam(key, true) ? req->getParam(key, true)->value() : fallback;
+        };
+        bool dhcp = req->hasParam("useDHCP", true);
+        String ip = value("staticIP", _eth.staticIP);
+        String gateway = value("staticGW", _eth.staticGW);
+        String host = value("wsHost", _ws.arenaHost);
+        String role = value("role", _role.getRoleName());
+        host.trim();
+        long port = value("wsPort", String(_ws.arenaPort)).toInt();
+        IPAddress address;
+        if ((!dhcp && (!address.fromString(ip) || !address.fromString(gateway))) ||
+            !address.fromString(host) || port < 1 || port > 65535 ||
+            (role != "redHub" && role != "blueHub" && role != "FMS_TABLE")) {
+            req->send(400, "text/plain", "Invalid network address, port, or device role; settings not saved.");
+            return;
         }
-
-        // WebSocket server IP
-        if (req->hasParam("wsHost", true)) {
-            String wsHost = req->getParam("wsHost", true)->value();
-            wsHost.trim();
-
-            IPAddress testWsHost;
-            if (!testWsHost.fromString(wsHost)) {
-                req->send(200, "text/html",
-                          _buildPage("ERROR: Invalid WebSocket Server IP — not saved."));
-                return;
-            }
-
-            _ws.arenaHost = wsHost;
-            _ws.savePreferences();
-            Serial.printf("[WEB] WebSocket server IP: %s\n", wsHost.c_str());
-        }
-
-        // Role
-        if (req->hasParam("role", true)) {
-            _role.setRoleByName(req->getParam("role", true)->value());
-            _role.savePreferences();
-        }
-
+        _eth.useDHCP = dhcp;
+        _eth.staticIP = ip;
+        _eth.staticGW = gateway;
+        _ws.arenaHost = host;
+        _ws.arenaPort = port;
+        _ws.savePreferences();
+        // Hardware role and HTTP worker destination stay fixed until reboot.
+        _role.setRoleByName(role, false);
         _eth.savePreferences();
 
         String rebootPage = R"(<!DOCTYPE html>
