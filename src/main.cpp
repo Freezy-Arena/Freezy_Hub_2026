@@ -31,7 +31,10 @@ bool _debugSerial = DEBUG_SERIAL;
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
-    if (isFmsTable) return;
+    if (isFmsTable) {
+        fmsTable.onCoilUpdate(coils, count);
+        return;
+    }
     const RoleConfig& role = roleManager.getConfig();
 
     // Safety check — guard against shorter-than-expected coil arrays

@@ -258,6 +258,13 @@ void WsManager::_handleCoilChange(JsonObject data) {
     }
 
     if (coilArr.size() > 128) { ++_parseErrors; return; }
+    if (_fmsTable) {
+        // A partial/malformed snapshot must not spuriously turn stack lights off.
+        if (coilArr.size() <= COIL_STACK_LIGHT_BLUE) { ++_parseErrors; return; }
+        for (uint8_t i = COIL_STACK_LIGHT_GREEN; i <= COIL_STACK_LIGHT_BLUE; ++i) {
+            if (!coilArr[i].is<bool>()) { ++_parseErrors; return; }
+        }
+    }
     uint8_t count = coilArr.size();
     bool coils[128];
     for (uint8_t i = 0; i < count; i++) {

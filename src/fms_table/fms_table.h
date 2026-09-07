@@ -11,6 +11,7 @@ public:
     void begin(const String& host, uint16_t port, EthManager& network);
     void update(LedManager& leds, uint32_t wsMessages);
     void serviceStops(WsManager& ws); // Main-loop owner of WebSocket delivery.
+    void onCoilUpdate(const bool* coils, uint8_t count);
 private:
     static void sampleTask(void* self);
     static void deliveryTask(void* self);

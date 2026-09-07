@@ -140,9 +140,14 @@ class Handler(BaseHTTPRequestHandler):
                 now = time.monotonic()
                 with self.server.lock:
                     hz = self.server.controls["notifications_hz"]
+                    stack = self.server.controls.copy()
                 if hz > 0 and now >= next_notify:
+                    coils = [False] * 32
+                    for index, name in ((2, "greenStackLight"), (3, "orangeStackLight"),
+                                        (4, "redStackLight"), (5, "blueStackLight")):
+                        coils[index] = bool(stack[name])
                     for message in (
-                        dict(type="plcIoChange", data=dict(Coils=[False] * 32, Registers=[0] * 32)),
+                        dict(type="plcIoChange", data=dict(Coils=coils, Registers=[0] * 32)),
                         dict(type="arenaStatus", data=dict(MatchState=0)),
                         dict(type="setLedMode", data=dict(RedMode=1, BlueMode=2)),
                     ):

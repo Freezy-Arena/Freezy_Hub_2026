@@ -54,15 +54,15 @@ for the sole outstanding write. `success` must be a JSON boolean and `count`
 an integer. Hub telemetry send flags cannot disable FMS stop writes, and the
 unacknowledged hub input helpers cannot write while FMS owns this connection.
 
-Start-match and stack-light requests retain their HTTP contracts and run in
-the separate worker. Both transports use the same saved arena host and port.
+Start-match requests retain their HTTP contract and run in the separate worker.
+Stack lights now follow `plcIoChange.Coils` over WebSocket instead of HTTP polling. Both transports use the same saved arena host and port.
 There is no HTTP stop fallback: mixing independent transports would complicate
 ordering and acknowledgments. FMS never runs synchronous HTTP login in a WS
 callback; an unexpected protected PLC route stays disconnected, retains stop
 history, and inhibits starts rather than blocking sampling with authentication.
 
 The PLC route sends PLC and LED notifications, not arenaStatus or redundant
-periodic ledStatus frames. The table did not use these to produce its stack
+periodic ledStatus frames. The table does not need these to produce its stack
 lights; the old `Registers[3]` value only gated console printing. This intentional
 subscription change removes unused traffic. The bench fixture still injects
 arenaStatus at match rates to stress the parser. No arena code was changed.
@@ -81,11 +81,21 @@ arenaStatus at match rates to stress the parser. No arena code was changed.
 | Stack LEDs | Red 3–62, blue 60–119, orange 120–179, green 180–235 (inclusive). Blue is written after red and wins at 60–62, including when blue is off |
 | Stack colors | Red `(255,0,0)`, blue `(0,0,255)`, orange `(150,100,0)`, green `(0,255,0)` |
 
-Table startup clears all 750 pixels. Other pixels stay off. Stack JSON with
-missing keys defaults those lights off; malformed/non-object JSON or failed
-transport leaves the previous stack frame intact. Reads are nominally every
-500 ms when stop history is empty; stops take priority. LEDs use the shared
-last-frame comparison, so unchanged frames are not transmitted.
+Table startup clears all 750 pixels. Other pixels stay off. The arena coil
+mapping was checked against `plc/plc.go`: green=2, orange=3, red=4, blue=5,
+matching `src/websocket/coil_map.h`. Each valid `plcIoChange` updates the stack
+state, and the main loop renders changed colors without waiting for a 500 ms
+poll. There is no HTTP stack poll to overwrite a newer WebSocket state. This
+intentionally replaces the legacy named HTTP response with verified coil indices.
+Short snapshots or non-boolean stack coils are rejected and preserve the last
+valid frame. On disconnect the last frame remains; the reconnect snapshot
+resynchronizes it. If several updates arrive before rendering, the latest state
+wins rather than replaying old blink phases. Network/server delays can still
+lose blink phases; this removes the client's 500 ms polling limitation, not
+all possible timing delays. No independent local blink timer is introduced.
+
+LEDs retain their original ranges/colors/overlap and the shared last-frame
+comparison, so identical stack updates do not retransmit LED data.
 
 The response heartbeat uses dim white for a valid stop ACK or positive HTTP
 response, orange for a failed operation, red while stop transport is offline,
@@ -137,7 +147,7 @@ is retained if changing partition tables independently.
 
 * **Ownership:** priority-3 task on core 1 samples every one RTOS tick (nominal
   1 ms), with no HTTP, Preferences reads/writes, LED rendering, or logging.
-  Priority-1 HTTP worker on core 0 owns start/stack transport. Arduino loop
+  Priority-1 HTTP worker on core 0 owns start-request transport. Arduino loop
   services shared network/WebSocket/web configuration, calls the dedicated
   module's `serviceStops`, and renders snapshots through LedManager.
   WebSocketsClient has one owner (the main loop); background tasks never call it.
@@ -197,7 +207,7 @@ is retained if changing partition tables independently.
   The HTTP 200 is recorded as request response, not confirmation of match start.
 * **HTTP waits:** connect timeout 250 ms, read timeout 500 ms, no redirects, no
   keepalive, at most 512 response bytes. These are library operation timeouts,
-  not a guaranteed end-to-end real-time deadline. An in-flight stack/start call
+  not a guaranteed end-to-end real-time deadline. An in-flight start call
   no longer holds up stop delivery: WS stop servicing runs separately in the main
   loop. Measure both HTTP duration and WS ACK latency. WebSocket sends and LED
   output share the main loop; the high-priority sampler remains independent. WebSocket's
@@ -217,7 +227,7 @@ The separate periodic print in `ws_manager` is retained but disabled by
 are **since boot**, unlike the original windowed diagnostics. Restart a bench
 case to get independent maxima. `sample_gap_us` is in microseconds; all `_ms`
 fields and WebSocket gap/work are milliseconds. HTTP includes body read/cleanup
-for start/stack calls only. `stop_sent` counts tracked WS send attempts including
+for start calls only. `stop_sent` counts tracked WS send attempts including
 refreshes; `stop_fail` counts failed sends/ACKs/disconnects; `retry` counts stop
 failures requiring retry. `stop_rtt_ms` is maximum send-to-result time, including
 failed requests. `fail` and `last_http` describe HTTP only. These counters keep
@@ -293,7 +303,7 @@ analyzer; don't infer sample counts just from a hand-operated switch's bounce.
 | Lost response | drop_stop_responses=1 during a transition | ACK timeout closes WS; same state retried on a fresh connection before later transitions; no exactly-once assumption. Also inject stop_ack_delay_ms=1500 and invalid_stop_acks=1; late/invalid ACKs must not retire a later head. Restore delay to 0 to drain |
 | Overflow | Arena down; generate >256 changes | Red role indicator; FAULT=1; unretained count increases explicitly; frozen FIFO does not drain releases. On recovery only `false` stop requests; no start. Clear using the explicit stopped-bench recovery procedure |
 | Ethernet | Boot cable unplugged; exercise inputs, plug in; repeat link loss/recovery with DHCP and static IP | Diagnostics/sampling continue before IP; history survives link loss; addresses reacquired; HTTP and WS recover; no held-button start on reconnect |
-| Stack/response | Toggle all four JSON booleans independently; return malformed JSON and omit keys | Original ranges/colors/overlap preserved; missing keys off; malformed response retains prior lights; brightness/order/power unchanged; unchanged frames not resent |
+| Stack/response | Toggle coils 2?5 independently through plcIoChange; flash green at 100?250 ms phases; send short/non-boolean coil snapshots | Follow each received phase without 500 ms polling; original ranges/colors/overlap preserved; malformed/short snapshot retains prior lights; reconnect resynchronizes; unchanged frames not resent |
 | Match-rate/arena | 100 per topic/sec for 10 minutes, with stack changes and rapid stop input; then actual isolated arena at real match rate | Connected-state WS gap target <=100 ms; input gap target <=10,000 us, including delayed HTTP. Compare blocked-listener warnings with controller connected/disconnected and correlate timing; confirm arena actually asserts field stop, not only that setInput returns a success ACK |
 
 Check a saved steady-state capture:
@@ -321,7 +331,7 @@ passed. The build still emits the existing PCNT driver deprecation warning.
 
 The following user-reported hardware results are the **HTTP transport baseline**
 (commit `61cf390`), not validation of the subsequent WS transport change. Repeat
-start/stop, held start, and outage/reconnect tests on the new firmware, including
+start/stop, held start, stack coil flashing, and outage/reconnect tests on the new firmware, including
 lost ACK and delayed ACK cases. WS transport has not been flashed by the agent.
 
 User-reported baseline hardware validation:

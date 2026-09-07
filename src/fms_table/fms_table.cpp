@@ -1,6 +1,6 @@
 #include "fms_table.h"
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
+#include "../websocket/coil_map.h"
 
 void FmsTable::begin(const String& host, uint16_t port, EthManager& network) {
     _network = &network;
@@ -87,7 +87,7 @@ int FmsTable::request(const char* path, const char* body, String& response) {
     _status.httpMaxMs = max(_status.httpMaxMs, uint32_t(millis() - began));
     ++_status.httpCount;
     _status.lastHttp = status;
-    // HTTP now handles only start and stack lights; stop ACKs are separate.
+    // HTTP handles start requests only; stop ACKs and stack coils use WebSocket.
     _status.heartbeat = status > 0 ? 1 : 2;
     if (status != 200) ++_status.failures;
     portEXIT_CRITICAL(&_mux);
@@ -161,13 +161,29 @@ void FmsTable::serviceStops(WsManager& ws) {
     portEXIT_CRITICAL(&_mux);
 }
 
+void FmsTable::onCoilUpdate(const bool* coils, uint8_t count) {
+    if (!coils || count <= COIL_STACK_LIGHT_BLUE) return;
+    bool red = coils[COIL_STACK_LIGHT_RED];
+    bool blue = coils[COIL_STACK_LIGHT_BLUE];
+    bool orange = coils[COIL_STACK_LIGHT_ORANGE];
+    bool green = coils[COIL_STACK_LIGHT_GREEN];
+    portENTER_CRITICAL(&_mux);
+    if (_status.red != red || _status.blue != blue ||
+        _status.orange != orange || _status.green != green) {
+        _status.red = red;
+        _status.blue = blue;
+        _status.orange = orange;
+        _status.green = green;
+        ++_status.stackVersion;
+    }
+    portEXIT_CRITICAL(&_mux);
+}
+
 void FmsTable::deliver() {
-    uint32_t lastStack = 0;
     for (;;) {
         uint32_t now = millis();
         bool connected = _network->isConnected();
         portENTER_CRITICAL(&_mux);
-        bool queued = _history.count != 0;
         bool fault = _history.fault;
         if (_startPending && fms::startExpired(now, _startAt, connected && _stopConnected)) {
             _startPending = false;
@@ -190,20 +206,6 @@ void FmsTable::deliver() {
             portEXIT_CRITICAL(&_mux);
             // Never retry an ambiguous start: the endpoint has no idempotency
             // key and returns 200 even if Arena.StartMatch rejects the match.
-        } else if (!queued && !fault && uint32_t(now - lastStack) >= 500) {
-            String response;
-            int status = request("/api/freezy/field_stack_light", nullptr, response);
-            JsonDocument doc;
-            if (status > 0 && !deserializeJson(doc, response) && doc.is<JsonObject>()) {
-                portENTER_CRITICAL(&_mux);
-                _status.red = doc["redStackLight"] | false;
-                _status.blue = doc["blueStackLight"] | false;
-                _status.orange = doc["orangeStackLight"] | false;
-                _status.green = doc["greenStackLight"] | false;
-                ++_status.stackVersion;
-                portEXIT_CRITICAL(&_mux);
-            }
-            lastStack = millis();
         }
         vTaskDelay(1);
     }
