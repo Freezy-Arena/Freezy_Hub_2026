@@ -1,11 +1,12 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include "../websocket/input_map.h"
 
 namespace fms {
 constexpr int StopPin = 33;
 constexpr int StartPin = 34;
-constexpr int StopChannel = 0;
+constexpr int StopChannel = INPUT_FIELD_ESTOP;
 constexpr uint32_t RefreshMs = 100;
 constexpr uint32_t StopHoldMs = 100;
 constexpr uint32_t StartExpiryMs = 500;

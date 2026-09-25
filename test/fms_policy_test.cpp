@@ -59,7 +59,8 @@ constexpr bool rolloverAndSteadyInput() {
     for (int i = 0; i < 1000; ++i) history.observe(true, i);
     return history.count == 1 && history.observed == 1 && !history.fault;
 }
-static_assert(StopPin == 33 && StartPin == 34 && StopChannel == 0, "Legacy table wiring");
+static_assert(StopPin == 33 && StartPin == 34, "Legacy table wiring");
+static_assert(StopChannel == INPUT_FIELD_ESTOP, "Table stop uses the PLC input map");
 static_assert(!wireState(true) && wireState(false), "HIGH is field stop / wire false");
 static_assert(rapidTransitionsAndOutage(), "Ordered transitions retained through outage/retries");
 static_assert(queueWrapAndOverflow(), "Overflow latches and freezes retained history");

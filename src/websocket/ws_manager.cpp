@@ -1,4 +1,5 @@
 #include "ws_manager.h"
+#include "input_map.h"
 #include <Preferences.h>
 #include <HTTPClient.h>
 
@@ -207,9 +208,10 @@ void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel
 
 bool WsManager::sendStopInput(bool state) {
     if (!_fmsTable || !_connected || !_inputAck.begin(millis())) return false;
-    String frame = state
-        ? "{\"type\":\"setInput\",\"data\":[{\"channel\":0,\"state\":true}]}"
-        : "{\"type\":\"setInput\",\"data\":[{\"channel\":0,\"state\":false}]}";
+    String frame = "{\"type\":\"setInput\",\"data\":[{\"channel\":";
+    frame += String(static_cast<unsigned int>(INPUT_FIELD_ESTOP));
+    frame += ",\"state\":";
+    frame += state ? "true}]}" : "false}]}";
     if (!_ws.sendTXT(frame)) {
         _inputAck.reply(false);
         _ws.disconnect();
