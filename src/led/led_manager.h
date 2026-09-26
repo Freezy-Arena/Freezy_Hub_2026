@@ -19,7 +19,7 @@ enum LedColorOrder : uint8_t {
 
 class LedManager {
 public:
-    void begin(bool fmsTable = false);
+    void begin(bool stopController = false);
     void update();
     void setLedRaw(uint16_t index, CRGB color);  // Set without calling show()
     void show();  

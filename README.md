@@ -10,6 +10,7 @@ Firmware for an ESP32-S3 that connects physical FRC hub hardware to a Cheesy Are
 - Four overflow-safe ESP32 PCNT counter channels with 64-bit accumulation
 - Red Hub and Blue Hub roles with separate PLC mappings
 - FMS_TABLE role with dedicated stop sampling/delivery and legacy settings migration; see [protocol comparison and bench tests](docs/FMS_TABLE.md)
+- RED_ALLIANCE and BLUE_ALLIANCE roles for three E-stops and three A-stops each, with retained transitions and acknowledged delivery; see [alliance stop wiring and behavior](docs/ALLIANCE_STOPS.md)
 - W5500 wired Ethernet with DHCP or static addressing
 - Arena WebSocket client with automatic reconnect
 - Form login and `session_token` cookie authentication for protected arena pages
@@ -50,10 +51,26 @@ The main page configures:
 
 - DHCP or a static IP address and gateway
 - Arena server IP and port, shared by WebSocket and FMS Table HTTP
-- Device role: `redHub`, `blueHub`, or `FMS_TABLE`
+- Device role: `redHub`, `blueHub`, `FMS_TABLE`, `RED_ALLIANCE`, or `BLUE_ALLIANCE`
 - Links to the WebSocket and LED settings pages
 
 Saving the main page restarts the controller.
+
+### Live input status
+
+For `FMS_TABLE`, `RED_ALLIANCE`, and `BLUE_ALLIANCE`, select **View Input Status**
+on the configuration page, or open `http://<device-ip>/inputs` after the role has
+been saved and the controller rebooted.
+
+- FMS Table shows **Field E-stop** and **Start button**.
+- Alliance roles show each station's **E-stop** and **A-stop** (six inputs).
+- Red means a stop is pressed; green means start is pressed; gray means released.
+  Each indicator also has a text label. Unavailable readings use a dashed indicator.
+
+The page polls local sampled inputs every 500 ms and reports stale readings or
+connection loss. It also shows a latched controller fault. This is a read-only
+view of physical inputs, not confirmation of arena delivery or match state.
+The JSON endpoint is `/api/inputs`; both routes are unavailable for hub roles.
 
 ### WebSocket settings
 
@@ -66,7 +83,7 @@ Open **Configure WebSocket Messages** from the main page.
 | Arena username | `admin` | Username posted to the arena `/login` endpoint |
 | Arena password | `password` | Password posted to the arena `/login` endpoint |
 | Send Registers | Enabled | Sends `setRegisters` counter updates |
-| Send Inputs | Enabled | Sends `setInput` sensor updates |
+| Send Inputs | Enabled | Sends hub `setInput` sensor updates; stop-role delivery always stays enabled |
 
 When the protected field-testing WebSocket responds with HTTP 307 or 401, the controller:
 
@@ -141,6 +158,13 @@ for polarity, retained transitions, retries, overflow, settings, and bench tests
 It requires the inspected Freezy arena WebSocket and HTTP extensions; upstream compatibility
 must not be inferred from the hub LED support.
 
+`RED_ALLIANCE` and `BLUE_ALLIANCE` use GPIOs 1, 2, 3, 15, 18, and 16 for
+station 1 E/A, station 2 E/A, and station 3 E/A stops. Red writes channels 1–6;
+blue writes channels 7–12. Both use the original GPIO 47 status LEDs and
+dedicated input sampling, with independent transition queues and acknowledged
+WebSocket delivery. See [alliance stop roles](docs/ALLIANCE_STOPS.md) for polarity,
+retry/fault behavior, settings migration, and outstanding hardware validation.
+
 ## WebSocket protocol
 
 The default endpoint is:
@@ -204,7 +228,7 @@ Counter values are sent every 500 ms when register sending is enabled.
 | Preferences namespace | Stored settings |
 |---|---|
 | `network` | DHCP/static configuration and LED control mode |
-| `role` | Red Hub or Blue Hub role |
+| `role` | Hub, FMS Table, or alliance stop role |
 | `websocket` | Arena host/port, username/password, and message toggles |
 | `leds` | LED count and RGB color order |
 

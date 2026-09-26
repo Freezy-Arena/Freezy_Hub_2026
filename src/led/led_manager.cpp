@@ -1,9 +1,9 @@
 #include "led_manager.h"
 
-void LedManager::begin(bool fmsTable) {
-    _outputCount = fmsTable ? 750 : 300;
+void LedManager::begin(bool stopController) {
+    _outputCount = stopController ? 750 : 300;
     CLEDController* controller = nullptr;
-    if (fmsTable) {
+    if (stopController) {
         _ledCount = 750;
         _colorOrder = LED_ORDER_GRB;
         _brightness = 15;

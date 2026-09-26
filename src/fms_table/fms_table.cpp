@@ -36,6 +36,8 @@ void FmsTable::sample() {
     if (_sampleSeen) _status.sampleGapUs = max(_status.sampleGapUs, uint32_t(nowUs - _lastSampleUs));
     _sampleSeen = true;
     _lastSampleUs = nowUs;
+    _sampledAt = now;
+    _startPressed = start;
     _history.observe(state, now);
     if (_startEdge.sample(start, now)) {
         if (_history.fault || !state || _startPending || (!_network->isConnected() || !_stopConnected)) {
@@ -51,6 +53,19 @@ void FmsTable::sample() {
         ++_status.startRejected;
     }
     portEXIT_CRITICAL(&_mux);
+}
+
+InputStatusSnapshot FmsTable::inputStatus() {
+    InputStatusSnapshot snapshot;
+    portENTER_CRITICAL(&_mux);
+    snapshot.sampled = _sampleSeen;
+    snapshot.sampledAt = _sampledAt;
+    snapshot.fault = _history.fault;
+    snapshot.count = 2;
+    snapshot.pressed[0] = !_history.latest;
+    snapshot.pressed[1] = _startPressed;
+    portEXIT_CRITICAL(&_mux);
+    return snapshot;
 }
 
 void FmsTable::deliveryTask(void* self) {

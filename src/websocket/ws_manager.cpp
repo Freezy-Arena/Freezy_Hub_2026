@@ -80,7 +80,7 @@ void WsManager::update() {
     if (_lastUpdate) _wsGap = max(_wsGap, uint32_t(now - _lastUpdate));
     _lastUpdate = now;
     _ws.loop();
-    if (_fmsTable) {
+    if (_stopInputs) {
         _inputAck.expire(millis());
         if (_inputAck.resetRequired) {
             _ws.disconnect();
@@ -89,7 +89,7 @@ void WsManager::update() {
         }
     }
     _wsWork = max(_wsWork, uint32_t(millis() - now));
-    if (_debugSerial && _fmsTable && uint32_t(now - _lastReport) >= 5000) {
+    if (_debugSerial && _stopInputs && uint32_t(now - _lastReport) >= 5000) {
         _lastReport = now;
         Serial.printf("[WS TIMING] gap_ms=%lu work_ms=%lu messages=%lu arena=%lu plc=%lu parse_errors=%lu disconnects=%lu\n",
             _wsGap, _wsWork, _messages, _arenaMessages, _plcMessages, _parseErrors, _disconnects);
@@ -176,7 +176,7 @@ void WsManager::_sendJson(const String& type, JsonDocument& doc) {
 }
 
 void WsManager::sendInputs(const bool* states, uint8_t count) {
-    if (_fmsTable) return; // Only the acknowledged stop path may write FMS inputs.
+    if (_stopInputs) return; // Only the acknowledged stop path may write stop inputs.
     if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
@@ -192,7 +192,7 @@ void WsManager::sendInputs(const bool* states, uint8_t count) {
     _sendJson("setInput", doc);
 }
 void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel version for testing
-    if (_fmsTable) return;
+    if (_stopInputs) return;
     if (!sendInputsEnabled || !_connected) return;
 
     JsonDocument doc;
@@ -206,10 +206,12 @@ void WsManager::sendInput(const bool state, uint8_t channel) { // Single channel
     _sendJson("setInput", doc);
 }
 
-bool WsManager::sendStopInput(bool state) {
-    if (!_fmsTable || !_connected || !_inputAck.begin(millis())) return false;
+bool WsManager::sendStopInput(bool state, uint8_t channel) {
+    if (!_stopInputs || channel < _firstStopChannel ||
+        channel >= _firstStopChannel + _stopChannelCount ||
+        !_connected || !_inputAck.begin(millis())) return false;
     String frame = "{\"type\":\"setInput\",\"data\":[{\"channel\":";
-    frame += String(static_cast<unsigned int>(INPUT_FIELD_ESTOP));
+    frame += String(static_cast<unsigned int>(channel));
     frame += ",\"state\":";
     frame += state ? "true}]}" : "false}]}";
     if (!_ws.sendTXT(frame)) {
@@ -226,7 +228,7 @@ bool WsManager::sendStopInput(bool state) {
 void WsManager::sendCounters(int64_t ch0, int64_t ch1,
                               int64_t ch2, int64_t ch3,
                               const RoleConfig& role) {
-    if (!sendRegistersEnabled || !_connected) return;
+    if (_stopInputs || !sendRegistersEnabled || !_connected) return;
 
     int64_t total = ch0 + ch1 + ch2 + ch3;
 
@@ -316,7 +318,7 @@ void WsManager::_handleMessage(const String& raw) {
         ++_arenaMessages;
         WS_LOG("[WS] ← arenaStatus received\n");
     } else if (type == "plcInputSetSuccess") {
-        if (_fmsTable) {
+        if (_stopInputs) {
             bool valid = InputAck::valid(data["success"].is<bool>(), data["success"].as<bool>(),
                                          data["count"].is<int>(), data["count"].as<int>());
             _inputAck.reply(valid);
@@ -329,7 +331,7 @@ void WsManager::_handleMessage(const String& raw) {
     } else if (type == "ping") {
         WS_LOG("[WS] ← Ping received\n");
     } else if (type == "error") {
-        if (_fmsTable) _inputAck.reply(false);
+        if (_stopInputs) _inputAck.reply(false);
         Serial.printf("[WS] ← Server error: %s\n",
                       doc["data"].as<String>().c_str());
     } else {
@@ -363,9 +365,9 @@ void WsManager::_onEvent(WStype_t type, uint8_t* payload, size_t length) {
                 bool authenticationRequired =
                     reason.indexOf("HTTP 401") >= 0 ||
                     reason.indexOf("HTTP 307") >= 0;
-                // FMS uses the inspected public /api/plc/websocket endpoint.
+                // Stop roles use the inspected public /api/plc/websocket endpoint.
                 // Never run synchronous login HTTP in its WebSocket callback.
-                if (!_fmsTable && !_usingSessionAuth && authenticationRequired) {
+                if (!_stopInputs && !_usingSessionAuth && authenticationRequired) {
                     Serial.println("[WS] Authentication required; requesting session cookie");
                     _authenticateWithSession();
                 }

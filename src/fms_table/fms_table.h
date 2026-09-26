@@ -4,6 +4,7 @@
 #include "../network/network_manager.h"
 #include "../led/led_manager.h"
 #include "../websocket/ws_manager.h"
+#include "../input_status.h"
 
 class FmsTable {
 public:
@@ -12,6 +13,7 @@ public:
     void update(LedManager& leds, uint32_t wsMessages);
     void serviceStops(WsManager& ws); // Main-loop owner of WebSocket delivery.
     void onCoilUpdate(const bool* coils, uint8_t count);
+    InputStatusSnapshot inputStatus();
 private:
     static void sampleTask(void* self);
     static void deliveryTask(void* self);
@@ -44,6 +46,8 @@ private:
     bool _asserted = false;
     uint32_t _startAt = 0, _lastSampleUs = 0;
     bool _sampleSeen = false;
+    bool _startPressed = false;
+    uint32_t _sampledAt = 0;
     uint32_t _lastReport = 0, _lastHeartbeat = 0, _stackVersion = 0;
     bool _heartbeatOn = false;
     uint32_t _lastLoopAt = 0, _loopGapMs = 0, _ledMaxMs = 0, _warningAt = 0;

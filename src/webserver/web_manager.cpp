@@ -1,4 +1,6 @@
 #include "web_manager.h"
+#include "input_status_page.h"
+#include "../alliance/alliance_policy.h"
 
 static String htmlEscape(const String& value) {
     String escaped;
@@ -171,6 +173,10 @@ String WebManager::_buildPage(const String& message) {
                 + message + "</div>";
     }
 
+    if (isStopRole(_role.getRole())) {
+        html += "<a class=\"nav-link\" href=\"/inputs\">View Input Status</a>";
+    }
+
     // Status block
     html += R"(
     <div class="status-block">
@@ -226,6 +232,10 @@ String WebManager::_buildPage(const String& message) {
     + String(_role.getRoleName() == "blueHub" ? "selected" : "") + R"(>Blue Hub</option>
           <option value="FMS_TABLE" )"
     + String(_role.getRoleName() == "FMS_TABLE" ? "selected" : "") + R"(>FMS Table</option>
+          <option value="RED_ALLIANCE" )"
+    + String(_role.getRoleName() == "RED_ALLIANCE" ? "selected" : "") + R"(>Red Alliance E-stop / A-stop</option>
+          <option value="BLUE_ALLIANCE" )"
+    + String(_role.getRoleName() == "BLUE_ALLIANCE" ? "selected" : "") + R"(>Blue Alliance E-stop / A-stop</option>
         </select>
       </div>
 
@@ -396,7 +406,7 @@ String WebManager::_buildWebSocketPage(const String& message) {
       </div>
       <div class="toggle-row">
         <div class="toggle-label">Send Registers
-          <small>Allow setRegisters counter updates</small>
+          <small>Allow hub counter updates</small>
         </div>
         <label class="switch">
           <input type="checkbox" name="sendRegisters" value="1" )"
@@ -406,7 +416,7 @@ String WebManager::_buildWebSocketPage(const String& message) {
       </div>
       <div class="toggle-row">
         <div class="toggle-label">Send Inputs
-          <small>Allow setInput state updates</small>
+          <small>Allow hub sensor updates. E-stop and A-stop delivery always stays enabled.</small>
         </div>
         <label class="switch">
           <input type="checkbox" name="sendInputs" value="1" )"
@@ -426,6 +436,60 @@ String WebManager::_buildWebSocketPage(const String& message) {
 
 void WebManager::_setupRoutes() {
 
+    _server.on("/inputs", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        if (!isStopRole(_role.getRole())) {
+            req->send(404, "text/plain", "Input status is available for FMS Table and alliance roles after saving and rebooting.");
+            return;
+        }
+        auto* response = req->beginResponse(200, "text/html", INPUT_STATUS_PAGE);
+        response->addHeader("Cache-Control", "no-store");
+        req->send(response);
+    });
+
+    _server.on("/api/inputs", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        auto sendJson = [&](int code, const String& body) {
+            auto* response = req->beginResponse(code, "application/json", body);
+            response->addHeader("Cache-Control", "no-store");
+            req->send(response);
+        };
+        if (!isStopRole(_role.getRole())) {
+            sendJson(404, "{\"error\":\"Input status is not available for this role\"}");
+            return;
+        }
+        if (!_inputStatus) {
+            sendJson(503, "{\"error\":\"Input sampler unavailable\"}");
+            return;
+        }
+        const InputStatusSnapshot snapshot = _inputStatus();
+        bool table = _role.getRole() == ROLE_FMS_TABLE;
+        uint8_t expectedCount = table ? 2 : alliance::InputCount;
+        if (snapshot.count != expectedCount) {
+            sendJson(503, "{\"error\":\"Input sampler unavailable\"}");
+            return;
+        }
+        JsonDocument doc;
+        doc["role"] = _role.getRoleName();
+        doc["sampled"] = snapshot.sampled;
+        doc["sampleAgeMs"] = uint32_t(millis() - snapshot.sampledAt);
+        doc["fault"] = snapshot.fault;
+        JsonArray inputs = doc["inputs"].to<JsonArray>();
+        for (uint8_t i = 0; i < snapshot.count; ++i) {
+            JsonObject input = inputs.add<JsonObject>();
+            input["pressed"] = snapshot.pressed[i];
+            input["kind"] = table && i == 1 ? "start" : "stop";
+            if (table) {
+                input["label"] = i == 0 ? "Field E-stop" : "Start button";
+                input["pin"] = i == 0 ? fms::StopPin : fms::StartPin;
+            } else {
+                input["label"] = "Station " + String(i / 2 + 1) + (i % 2 == 0 ? " E-stop" : " A-stop");
+                input["pin"] = alliance::Pins[i];
+            }
+        }
+        String body;
+        serializeJson(doc, body); // No sampler lock is held while allocating or serving HTTP.
+        sendJson(200, body);
+    });
+
     // GET / — config page
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {
         req->send(200, "text/html", _buildPage());
@@ -436,6 +500,10 @@ void WebManager::_setupRoutes() {
     });
 
     _server.on("/led", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        if (isAllianceRole(_role.getRole())) {
+            req->send(200, "text/html", "<h1>Alliance Stop LEDs</h1><p>Status indicators use the original stop-controller wiring: GPIO 47, GRB, 750 LEDs, brightness 15, 900 mW power limit.</p><p>LED 0: delivery heartbeat; LED 1: alliance color (flashing red on a latched fault); LED 2: WebSocket activity. Other pixels remain off.</p><p><a href='/'>Back to configuration</a></p>");
+            return;
+        }
         if (_role.getRole() == ROLE_FMS_TABLE) {
             req->send(200, "text/html", "<h1>FMS Table LEDs</h1><p>Stack lights and status indicators use the table wiring: GPIO 47, GRB, 750 LEDs, brightness 15, 900 mW power limit.</p><p><a href='/'>Back to configuration</a></p>");
             return;
@@ -444,8 +512,8 @@ void WebManager::_setupRoutes() {
     });
 
     _server.on("/led/save", HTTP_POST, [this](AsyncWebServerRequest* req) {
-        if (_role.getRole() == ROLE_FMS_TABLE) {
-            req->send(400, "text/plain", "FMS Table uses its fixed stack-light layout.");
+        if (isStopRole(_role.getRole())) {
+            req->send(400, "text/plain", "Stop-controller roles use their fixed LED layouts.");
             return;
         }
         int mode = req->hasParam("ledControl", true)
@@ -523,7 +591,8 @@ void WebManager::_setupRoutes() {
         IPAddress address;
         if ((!dhcp && (!address.fromString(ip) || !address.fromString(gateway))) ||
             !address.fromString(host) || port < 1 || port > 65535 ||
-            (role != "redHub" && role != "blueHub" && role != "FMS_TABLE")) {
+            (role != "redHub" && role != "blueHub" && role != "FMS_TABLE" &&
+             role != "RED_ALLIANCE" && role != "BLUE_ALLIANCE")) {
             req->send(400, "text/plain", "Invalid network address, port, or device role; settings not saved.");
             return;
         }

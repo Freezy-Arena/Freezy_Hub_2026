@@ -7,6 +7,16 @@ Select it on the existing configuration page, or flash over a legacy controller
 whose `settings/deviceRole` is `FMS_TABLE` without erasing NVS. This is the same
 firmware/environment as the hub: `pio run -e esp32-s3-devkitm-1`.
 
+The configuration page also links to **View Input Status** (`/inputs`), showing
+the locally sampled field E-stop (GPIO 33) and start button (GPIO 34). Indicators
+refresh every 500 ms using `/api/inputs`: red for a pressed stop, green for a
+pressed start, gray for released, and dashed for unavailable readings. A latched
+controller fault is shown separately. This read-only page reports physical
+inputs, not whether a start was accepted or a stop reached the arena. Sampling
+snapshots are copied under the existing lock; serving the page does not consume
+transitions, ACKs, or start events. Stale samples and failed requests clear live
+indicators. On-device/browser validation of this page remains outstanding.
+
 Read before implementation: `Freezy Estops/AGENTS.md`, `agents/README.md`,
 `agents/REFACTOR_PLAN.md`, and `agents/INVESTIGATION.md`. Reference source is
 `C:/Users/Capplegate/GitHub/Freezy Estops`, revision `83aff5e`; arena source is

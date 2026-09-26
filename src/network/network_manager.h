@@ -28,7 +28,7 @@
 class EthManager
 {
 public:
-    void begin(bool fmsTable = false);
+    void begin(bool stopController = false);
     void update(); // Call from loop()
 
     bool isConnected();

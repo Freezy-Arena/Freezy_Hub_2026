@@ -11,6 +11,7 @@
 #include "led_animator/led_animator.h"
 #include "config/legacy_fms.h"
 #include "fms_table/fms_table.h"
+#include "alliance/alliance_stops.h"
 
 LedManager leds;
 CounterManager counters;
@@ -22,15 +23,25 @@ WebManager      web(network, roleManager, leds, ws);       // Pass managers so w
 DmxLedManager   dmxLed(leds, roleManager);
 LedAnimator     ledAnimator(leds, roleManager);
 FmsTable        fmsTable;
+AllianceStops   allianceStops;
 bool            isFmsTable = false; // Hardware role stays fixed until reboot.
+bool            isAlliance = false;
+bool            isStopController = false;
 
 #define DEBUG_SERIAL false           // Routine debug only; keep summaries, connection events, and errors.
 bool _debugSerial = DEBUG_SERIAL;
+
+InputStatusSnapshot readInputStatus() {
+    if (isFmsTable) return fmsTable.inputStatus();
+    if (isAlliance) return allianceStops.inputStatus();
+    return {};
+}
 
 // ─── Coil callback ────────────────────────────────────────────────────────────
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
+    if (isAlliance) return;
     if (isFmsTable) {
         fmsTable.onCoilUpdate(coils, count);
         return;
@@ -75,7 +86,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 }
 
 void onSetLedMode(int redMode, int blueMode) {
-    if (isFmsTable) return;
+    if (isStopController) return;
     if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
 
     WS_LOG("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
@@ -94,12 +105,15 @@ void setup()
     migrateLegacyFmsSettings();
     roleManager.begin();            // Load role before anything that needs it
     isFmsTable = roleManager.getRole() == ROLE_FMS_TABLE;
+    isAlliance = isAllianceRole(roleManager.getRole());
+    isStopController = isStopRole(roleManager.getRole());
     ws.loadPreferences();
     if (isFmsTable) fmsTable.begin(ws.arenaHost, ws.arenaPort, network);
+    if (isAlliance) allianceStops.begin(roleManager.getRole());
 
     const RoleConfig& role = roleManager.getConfig();
 
-    if (!isFmsTable) {
+    if (!isStopController) {
         counters.begin();
         for (uint8_t i = 0; i < 4; i++) {
             counters.addChannel(i, role.counterPin[i]);
@@ -111,28 +125,36 @@ void setup()
         relays.addChannel(1, role.relayLight); // Vertical hub motor relay
     }
 
-    leds.begin(isFmsTable);
+    leds.begin(isStopController);
     ledAnimator.begin();
 
-    network.begin(isFmsTable);
+    network.begin(isStopController);
+    web.setInputStatusProvider(readInputStatus);
     web.begin();                    // Also starts while waiting for Ethernet IP
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
     ws.onSetLedMode(onSetLedMode);
-    ws.configureFmsTable(isFmsTable);
+    ws.configureStopRole(roleManager.getRole());
     ws.begin("", 0);                // Empty = use stored prefs
 
-    if (!isFmsTable) dmxLed.begin();
+    if (!isStopController) dmxLed.begin();
 }
 
 void loop()
 {
     network.update();
-    ws.setLedModeEnabled(!isFmsTable && network.ledControlMode == LED_CONTROL_WEBSOCKET);
+    ws.setLedModeEnabled(!isStopController && network.ledControlMode == LED_CONTROL_WEBSOCKET);
     ws.update();                    // Must be called every loop
     if (isFmsTable) fmsTable.serviceStops(ws);
+    if (isAlliance) allianceStops.serviceStops(ws, network.isConnected());
     web.update();               // Handles pending reboot
+
+    if (isAlliance) {
+        allianceStops.update(leds, ws.messageCount());
+        delay(1);
+        return;
+    }
 
     if (isFmsTable) {
         fmsTable.update(leds, ws.messageCount());

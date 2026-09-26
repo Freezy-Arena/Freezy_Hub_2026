@@ -1,12 +1,14 @@
 #pragma once
 #include <Preferences.h>
+#include "../role_config.h"
 
 // Run before any manager loads preferences. Existing hub settings win, and
 // legacy keys remain untouched for rollback to the original firmware.
 inline void migrateLegacyFmsSettings() {
     Preferences old, role;
     if (!old.begin("settings", true)) return;
-    if (old.getString("deviceRole", "") != "FMS_TABLE") {
+    String name = old.getString("deviceRole", "");
+    if (name != "FMS_TABLE" && name != "RED_ALLIANCE" && name != "BLUE_ALLIANCE") {
         old.end();
         return;
     }
@@ -29,8 +31,10 @@ inline void migrateLegacyFmsSettings() {
     if (!ws.isKey("arenaPort")) ws.putUShort("arenaPort", port > 0 && port <= 65535 ? port : 8080);
     // Both HTTP and WebSocket intentionally use the saved arena destination.
     ws.end();
-    role.putUChar("role", 2); // Commit migration last; repeat safely if interrupted.
+    uint8_t id = name == "RED_ALLIANCE" ? ROLE_RED_ALLIANCE
+               : name == "BLUE_ALLIANCE" ? ROLE_BLUE_ALLIANCE : ROLE_FMS_TABLE;
+    role.putUChar("role", id); // Commit migration last; repeat safely if interrupted.
     role.end();
     old.end();
-    Serial.println("[CONFIG] Imported legacy FMS_TABLE settings; original keys retained");
+    Serial.printf("[CONFIG] Imported legacy %s settings; original keys retained\n", name.c_str());
 }

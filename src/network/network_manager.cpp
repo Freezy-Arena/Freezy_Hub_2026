@@ -60,14 +60,14 @@ void EthManager::savePreferences()
     Serial.println("[NET] Prefs saved");
 }
 
-void EthManager::begin(bool fmsTable) {
+void EthManager::begin(bool stopController) {
     loadPreferences();
 
     Network.onEvent(_onEvent);
 
     ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR,
               ETH_PHY_CS, ETH_PHY_IRQ, ETH_PHY_RST,
-              fmsTable ? SPI2_HOST : ETH_PHY_SPI_HOST,
+              stopController ? SPI2_HOST : ETH_PHY_SPI_HOST,
               ETH_PHY_SPI_SCK, ETH_PHY_SPI_MISO, ETH_PHY_SPI_MOSI);
 
     if (!useDHCP) {

@@ -5,12 +5,15 @@
 #include "../role_config.h"
 #include "../led/led_manager.h"
 #include "../websocket/ws_manager.h"
+#include "../input_status.h"
 
 class WebManager {
 public:
     WebManager(EthManager& eth, RoleManager& role, LedManager& leds, WsManager& ws);
     void begin();
     void update();
+    // Set once before begin(); the provider returns a synchronized sampler snapshot.
+    void setInputStatusProvider(InputStatusProvider provider) { _inputStatus = provider; }
 
 private:
     AsyncWebServer  _server;
@@ -18,6 +21,7 @@ private:
     RoleManager&    _role;
     LedManager&     _leds;
     WsManager&      _ws;
+    InputStatusProvider _inputStatus = nullptr;
 
     bool        _rebootPending  = false;
     uint32_t    _rebootAt       = 0;
