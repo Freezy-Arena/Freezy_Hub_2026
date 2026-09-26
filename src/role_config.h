@@ -9,8 +9,19 @@
 
 enum DeviceRole : uint8_t {
     ROLE_RED_HUB  = 0,
-    ROLE_BLUE_HUB = 1
+    ROLE_BLUE_HUB = 1,
+    ROLE_FMS_TABLE = 2,
+    ROLE_RED_ALLIANCE = 3,
+    ROLE_BLUE_ALLIANCE = 4
 };
+
+constexpr bool isAllianceRole(DeviceRole role) {
+    return role == ROLE_RED_ALLIANCE || role == ROLE_BLUE_ALLIANCE;
+}
+
+constexpr bool isStopRole(DeviceRole role) {
+    return role == ROLE_FMS_TABLE || isAllianceRole(role);
+}
 
 enum LedControlMode : uint8_t {
     LED_CONTROL_COIL        = 0,
@@ -83,7 +94,16 @@ static const RoleConfig ROLE_CONFIGS[] = {
         {GPIO_NUM_15, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_3},    // Counter pins
         GPIO_NUM_34, GPIO_NUM_35                             // Relay pins
 
-    }
+    },
+    { ROLE_FMS_TABLE, "FMS_TABLE", 0, 0, 0, 0, 0, 0, 0,
+      {0, 0, 0, 0}, {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC},
+      GPIO_NUM_NC, GPIO_NUM_NC },
+    { ROLE_RED_ALLIANCE, "RED_ALLIANCE", 0, 0, 0, 0, 0, 0, 0,
+      {0, 0, 0, 0}, {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC},
+      GPIO_NUM_NC, GPIO_NUM_NC },
+    { ROLE_BLUE_ALLIANCE, "BLUE_ALLIANCE", 0, 0, 0, 0, 0, 0, 0,
+      {0, 0, 0, 0}, {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC},
+      GPIO_NUM_NC, GPIO_NUM_NC }
 };
 
 // ─── Role manager ─────────────────────────────────────────────────────────────
@@ -102,15 +122,21 @@ public:
     }
 
     void setRole(DeviceRole role) {
+        if (role > ROLE_BLUE_ALLIANCE) return;
         _role = role;
         savePreferences();
         Serial.printf("[ROLE] Role changed to: %s\n", getConfig().name);
     }
 
-    void setRoleByName(const String& name) {
+    void setRoleByName(const String& name, bool apply = true) {
         for (auto& cfg : ROLE_CONFIGS) {
             if (name.equalsIgnoreCase(cfg.name)) {
-                setRole(cfg.role);
+                if (apply) setRole(cfg.role);
+                else {
+                    _prefs.begin(ROLE_PREFS_NS, false);
+                    _prefs.putUChar("role", static_cast<uint8_t>(cfg.role));
+                    _prefs.end();
+                }
                 return;
             }
         }
@@ -124,6 +150,7 @@ public:
     void loadPreferences() {
         _prefs.begin(ROLE_PREFS_NS, true);
         _role = (DeviceRole)_prefs.getUChar("role", ROLE_RED_HUB);
+        if (_role > ROLE_BLUE_ALLIANCE) _role = ROLE_RED_HUB;
         _prefs.end();
     }
 

@@ -17,7 +17,12 @@ enum LedMode : uint8_t {
     LED_MODE_RED_STARTUP    = 8,
     LED_MODE_BLUE_STARTUP   = 9,
     LED_MODE_RED_ADVANTAGE  = 10,
-    LED_MODE_BLUE_ADVANTAGE = 11
+    LED_MODE_BLUE_ADVANTAGE = 11,
+    LED_MODE_RAINBOW        = 12,
+    LED_MODE_SIDE_1_TEST    = 13,
+    LED_MODE_SIDE_2_TEST    = 14,
+    LED_MODE_SIDE_3_TEST    = 15,
+    LED_MODE_SIDE_4_TEST    = 16
 };
 
 // Mirrors strip.go constants
@@ -50,10 +55,13 @@ private:
     void _renderPulse(CRGB color);
     void _renderStartup(CRGB color);
     void _renderAdvantage(CRGB color);
+    void _renderRainbow();
+    void _renderSideTest(uint8_t side);
 
     void _fillSide(int side, CRGB color, int counter, int direction);
     void _fillFixture(int startLed, CRGB color, float percentage, int direction, int count);
     void _sweepFixture(int startLed, int counter, int direction, int count);
 
+    CRGB _rainbowColor(uint8_t position);
     CRGB _colorForMode(LedMode mode);
 };

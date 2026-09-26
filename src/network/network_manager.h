@@ -3,6 +3,7 @@
 #include <ETH.h>
 #include <Network.h>
 #include <Preferences.h>
+#include <atomic>
 #include "../role_config.h"
 
 // W5500 SPI pins
@@ -27,7 +28,7 @@
 class EthManager
 {
 public:
-    void begin();
+    void begin(bool stopController = false);
     void update(); // Call from loop()
 
     bool isConnected();
@@ -46,7 +47,7 @@ public:
 
 private:
     static void _onEvent(arduino_event_id_t event, arduino_event_info_t info);
-    static bool _connected;
+    static std::atomic<bool> _connected;
 
     Preferences _prefs;
 };

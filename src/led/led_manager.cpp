@@ -1,13 +1,32 @@
 #include "led_manager.h"
 
-void LedManager::begin() {
-    loadPreferences();
-    FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(_leds, LED_MAX_LEDS)
-           .setCorrection(TypicalLEDStrip);
+void LedManager::begin(bool stopController) {
+    _outputCount = stopController ? 750 : 300;
+    CLEDController* controller = nullptr;
+    if (stopController) {
+        _ledCount = 750;
+        _colorOrder = LED_ORDER_GRB;
+        _brightness = 15;
+        controller = &FastLED.addLeds<LED_TYPE, 47, GRB>(_leds, _outputCount);
+        FastLED.setMaxPowerInMilliWatts(900);
+    } else {
+        loadPreferences();
+        switch (_colorOrder) {
+            case LED_ORDER_RGB: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, RGB>(_leds, _outputCount); break;
+            case LED_ORDER_RBG: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, RBG>(_leds, _outputCount); break;
+            case LED_ORDER_GRB: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, GRB>(_leds, _outputCount); break;
+            case LED_ORDER_GBR: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, GBR>(_leds, _outputCount); break;
+            case LED_ORDER_BRG: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, BRG>(_leds, _outputCount); break;
+            case LED_ORDER_BGR: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, BGR>(_leds, _outputCount); break;
+            default: controller = &FastLED.addLeds<LED_TYPE, LED_PIN, BRG>(_leds, _outputCount); break;
+        }
+        controller->setCorrection(TypicalLEDStrip);
+    }
     FastLED.setBrightness(_brightness);
+    _dirty = true;  // Push the initial off frame even when the buffer starts zeroed.
     clear();
-    FastLED.show();
-    Serial.printf("[LED] Initialized with %u LEDs\n", _ledCount);
+    Serial.printf("[LED] Initialized with %u LEDs, color order %s\n",
+                  _ledCount, getColorOrderName());
 }
 
 void LedManager::update() {
@@ -16,48 +35,81 @@ void LedManager::update() {
 }
 
 void LedManager::setLedRaw(uint16_t index, CRGB color) {
-    if (index < _ledCount) {
+    if (index < _ledCount && _leds[index] != color) {
         _leds[index] = color;
+        _dirty = true;
     }
 }
 
 void LedManager::show() {
+    if (!_dirty) return;
+    // Compare the completed frame: animations may change pixels and then
+    // restore them while rendering, leaving the final output unchanged.
+    bool changed = !_hasShown || _brightness != _lastShownBrightness;
+    for (uint16_t i = 0; !changed && i < _outputCount; i++) {
+        changed = _leds[i] != _lastShown[i];
+    }
+    if (!changed) {
+        _dirty = false;
+        return;
+    }
     FastLED.show();
+    for (uint16_t i = 0; i < _outputCount; i++) {
+        _lastShown[i] = _leds[i];
+    }
+    _lastShownBrightness = _brightness;
+    _hasShown = true;
+    _dirty = false;
 }
 
 void LedManager::setAll(CRGB color) {
-    fill_solid(_leds, _ledCount, color);
-    if (_ledCount < LED_MAX_LEDS) {
-        fill_solid(_leds + _ledCount, LED_MAX_LEDS - _ledCount, CRGB::Black);
+    for (uint16_t i = 0; i < _outputCount; i++) {
+        CRGB next = i < _ledCount ? color : CRGB::Black;
+        if (_leds[i] != next) {
+            _leds[i] = next;
+            _dirty = true;
+        }
     }
-    FastLED.show();
+    show();
 }
 
 void LedManager::setLed(uint16_t index, CRGB color) {
-    if (index < _ledCount) {
-        _leds[index] = color;
-        FastLED.show();
-    }
+    setLedRaw(index, color);
+    show();
 }
 
 void LedManager::clear() {
-    fill_solid(_leds, LED_MAX_LEDS, CRGB::Black);
-    FastLED.show();
+    for (uint16_t i = 0; i < _outputCount; i++) {
+        if (_leds[i] != CRGB::Black) {
+            _leds[i] = CRGB::Black;
+            _dirty = true;
+        }
+    }
+    show();
 }
 
 void LedManager::setBrightness(uint8_t brightness) {
+    if (_brightness == brightness) return;
     _brightness = brightness;
     FastLED.setBrightness(_brightness);
-    FastLED.show();
+    _dirty = true;
+    show();
 }
 
 void LedManager::showRainbow(uint8_t deltaHue) {
-    fill_rainbow(_leds, _ledCount, _rainbowHue, deltaHue);
-    if (_ledCount < LED_MAX_LEDS) {
-        fill_solid(_leds + _ledCount, LED_MAX_LEDS - _ledCount, CRGB::Black);
+    CRGB frame[LED_MAX_LEDS];
+    fill_rainbow(frame, _ledCount, _rainbowHue, deltaHue);
+    if (_ledCount < _outputCount) {
+        fill_solid(frame + _ledCount, _outputCount - _ledCount, CRGB::Black);
+    }
+    for (uint16_t i = 0; i < _outputCount; i++) {
+        if (_leds[i] != frame[i]) {
+            _leds[i] = frame[i];
+            _dirty = true;
+        }
     }
     _rainbowHue++;
-    FastLED.show();
+    show();
 }
 
 void LedManager::showSolid(CRGB color) {
@@ -70,9 +122,11 @@ void LedManager::showChase(CRGB color, uint16_t speed) {
 
     if (_ledCount == 0) return;
 
-    clear();
-    _leds[_chasePos % _ledCount] = color;
-    FastLED.show();
+    for (uint16_t i = 0; i < _ledCount; i++) {
+        setLedRaw(i, CRGB::Black);
+    }
+    setLedRaw(_chasePos % _ledCount, color);
+    show();
     _chasePos++;
 }
 
@@ -81,22 +135,55 @@ uint16_t LedManager::getLedCount() const {
 }
 
 uint16_t LedManager::getMaxLedCount() const {
-    return LED_MAX_LEDS;
+    return _outputCount;
 }
 
 void LedManager::setLedCount(uint16_t count) {
-    _ledCount = constrain(count, (uint16_t)1, (uint16_t)LED_MAX_LEDS);
+    _ledCount = constrain(count, (uint16_t)1, (uint16_t)_outputCount);
+}
+
+LedColorOrder LedManager::getColorOrder() const {
+    return _colorOrder;
+}
+
+const char* LedManager::getColorOrderName() const {
+    switch (_colorOrder) {
+        case LED_ORDER_RGB: return "RGB";
+        case LED_ORDER_RBG: return "RBG";
+        case LED_ORDER_GRB: return "GRB";
+        case LED_ORDER_GBR: return "GBR";
+        case LED_ORDER_BRG: return "BRG";
+        case LED_ORDER_BGR: return "BGR";
+        default: return "BRG";
+    }
+}
+
+bool LedManager::setColorOrderByName(const String& name) {
+    if (name == "RGB") _colorOrder = LED_ORDER_RGB;
+    else if (name == "RBG") _colorOrder = LED_ORDER_RBG;
+    else if (name == "GRB") _colorOrder = LED_ORDER_GRB;
+    else if (name == "GBR") _colorOrder = LED_ORDER_GBR;
+    else if (name == "BRG") _colorOrder = LED_ORDER_BRG;
+    else if (name == "BGR") _colorOrder = LED_ORDER_BGR;
+    else return false;
+    return true;
 }
 
 void LedManager::loadPreferences() {
     _prefs.begin(LED_PREFS_NS, true);
     setLedCount(_prefs.getUShort("count", LED_DEFAULT_COUNT));
+    uint8_t savedOrder = _prefs.getUChar("colorOrder", LED_ORDER_BRG);
+    _colorOrder = savedOrder <= LED_ORDER_BGR
+        ? static_cast<LedColorOrder>(savedOrder)
+        : LED_ORDER_BRG;
     _prefs.end();
 }
 
 void LedManager::savePreferences() {
     _prefs.begin(LED_PREFS_NS, false);
     _prefs.putUShort("count", _ledCount);
+    _prefs.putUChar("colorOrder", static_cast<uint8_t>(_colorOrder));
     _prefs.end();
-    Serial.printf("[LED] Prefs saved - count: %u\n", _ledCount);
+    Serial.printf("[LED] Prefs saved - count: %u, color order: %s\n",
+                  _ledCount, getColorOrderName());
 }

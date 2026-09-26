@@ -4,7 +4,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include "../role_config.h"
-#include "../led_animator/led_animator.h"
+#include "input_ack.h"
 
 // Mirrors the Python register map
 // Counter channel → PLC register
@@ -14,6 +14,7 @@
 // Reg 2 = sum of Reg 7,8,9,10  (reserved for future channels)
 
 #define WS_RECONNECT_DELAY_MS   3000
+#define WS_MAX_MESSAGE_SIZE     (15 * 1024)
 #define WS_PREFS_NS             "websocket"
 extern bool _debugSerial;
 
@@ -24,7 +25,8 @@ extern bool _debugSerial;
 // coils: pointer to bool array, count: number of coils
 typedef void (*CoilCallback)(const bool* coils, uint8_t count);
 
-typedef void (*LedModeCallback)(LedMode redMode, LedMode blueMode);
+// setLedMode callback for the server's RedMode and BlueMode fields.
+typedef void (*LedModeCallback)(int redMode, int blueMode);
 
 
 class WsManager {
@@ -32,9 +34,22 @@ public:
     void begin(const String& host, uint16_t port, const String& path = "/api/plc/websocket");
     void update();                          // Call from loop()
 
-    void onLedMode(LedModeCallback cb);
+    void onSetLedMode(LedModeCallback cb);
+    void setLedModeEnabled(bool enabled);
     
     bool isConnected();
+    void configureStopRole(DeviceRole role) {
+        _fmsTable = role == ROLE_FMS_TABLE;
+        _stopInputs = isStopRole(role);
+        _firstStopChannel = role == ROLE_BLUE_ALLIANCE ? INPUT_BLUE_1_ESTOP
+                          : role == ROLE_RED_ALLIANCE ? INPUT_RED_1_ESTOP : INPUT_FIELD_ESTOP;
+        _stopChannelCount = isAllianceRole(role) ? 6 : 1;
+    }
+    uint32_t messageCount() const { return _messages; }
+    // Main-loop only. One untagged ACK at a time, restricted to this role's inputs.
+    // Stop writes bypass the optional hub telemetry flag.
+    bool sendStopInput(bool state, uint8_t channel = INPUT_FIELD_ESTOP);
+    InputReply takeStopReply() { return _inputAck.take(); }
 
     // Send input states 
     void sendInputs(const bool* states, uint8_t count);
@@ -50,20 +65,38 @@ public:
     // Preferences — ready for webserver config later
     String  arenaHost = "10.0.100.5";
     uint16_t arenaPort = 8080;
+    String authUsername = "admin";
+    String authPassword = "password";
+    bool sendRegistersEnabled = true;
+    bool sendInputsEnabled = true;
+    void resetSessionAuth();
     void loadPreferences();
     void savePreferences();
 
 private:
     WebSocketsClient    _ws;
     bool                _connected  = false;
+    bool                _usingSessionAuth = false;
+    String              _sessionCookie;
     uint32_t            _lastRetry  = 0;
+    bool                _receivingTextFragment = false;
+    bool                _ledModeEnabled = true;
+    String              _fragmentBuffer;
     CoilCallback        _coilCb     = nullptr;
     Preferences         _prefs;
+    bool _fmsTable = false;
+    bool _stopInputs = false;
+    uint8_t _firstStopChannel = INPUT_FIELD_ESTOP, _stopChannelCount = 1;
+    InputAck _inputAck;
+    uint32_t _messages = 0, _arenaMessages = 0, _plcMessages = 0, _parseErrors = 0;
+    uint32_t _disconnects = 0, _wsGap = 0, _wsWork = 0, _lastUpdate = 0, _lastReport = 0;
 
     void _onEvent(WStype_t type, uint8_t* payload, size_t length);
+    bool _appendTextFragment(const uint8_t* payload, size_t length);
     void _handleMessage(const String& raw);
     void _handleCoilChange(JsonObject data);
+    bool _authenticateWithSession();
     void _sendJson(const String& type, JsonDocument& data);
     LedModeCallback _ledModeCb = nullptr;
-    void _handleLedMode(JsonObject data);
+    void _handleSetLedMode(JsonObject data);
 };

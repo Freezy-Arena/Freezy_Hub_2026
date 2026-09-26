@@ -9,6 +9,9 @@
 #include "websocket/input_map.h"
 #include "dmx_led/dmx_led_manager.h"
 #include "led_animator/led_animator.h"
+#include "config/legacy_fms.h"
+#include "fms_table/fms_table.h"
+#include "alliance/alliance_stops.h"
 
 LedManager leds;
 CounterManager counters;
@@ -18,15 +21,31 @@ RoleManager     roleManager;
 WsManager       ws;
 WebManager      web(network, roleManager, leds, ws);       // Pass managers so web can read/write prefs
 DmxLedManager   dmxLed(leds, roleManager);
-LedAnimator ledAnim(leds, roleManager);
+LedAnimator     ledAnimator(leds, roleManager);
+FmsTable        fmsTable;
+AllianceStops   allianceStops;
+bool            isFmsTable = false; // Hardware role stays fixed until reboot.
+bool            isAlliance = false;
+bool            isStopController = false;
 
-#define DEBUG_SERIAL false           // Set false to silence all Serial output
+#define DEBUG_SERIAL false           // Routine debug only; keep summaries, connection events, and errors.
 bool _debugSerial = DEBUG_SERIAL;
+
+InputStatusSnapshot readInputStatus() {
+    if (isFmsTable) return fmsTable.inputStatus();
+    if (isAlliance) return allianceStops.inputStatus();
+    return {};
+}
 
 // ─── Coil callback ────────────────────────────────────────────────────────────
 // Fired by WsManager whenever a plcIoChange arrives
 
 void onCoilUpdate(const bool* coils, uint8_t count) {
+    if (isAlliance) return;
+    if (isFmsTable) {
+        fmsTable.onCoilUpdate(coils, count);
+        return;
+    }
     const RoleConfig& role = roleManager.getConfig();
 
     // Safety check — guard against shorter-than-expected coil arrays
@@ -36,7 +55,7 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
 
     // Match reset → clear all counters
     if (coilActive(COIL_MATCH_RESET)) {
-        Serial.println("[MAIN] Match reset → clearing counters");
+        WS_PRINTLN("[MAIN] Match reset → clearing counters");
         counters.resetAll();
     }
 
@@ -66,10 +85,15 @@ void onCoilUpdate(const bool* coils, uint8_t count) {
     }
 }
 
-void onLedModeUpdate(LedMode redMode, LedMode blueMode) {
-     if (network.ledControlMode == LED_CONTROL_WEBSOCKET) {
-        ledAnim.setMode(redMode, blueMode);
-    }
+void onSetLedMode(int redMode, int blueMode) {
+    if (isStopController) return;
+    if (network.ledControlMode != LED_CONTROL_WEBSOCKET) return;
+
+    WS_LOG("[HUB] LED modes received: RedMode=%d BlueMode=%d\n",
+                  redMode, blueMode);
+
+    ledAnimator.setMode(static_cast<LedMode>(redMode),
+                        static_cast<LedMode>(blueMode));
 }
 
 void setup()
@@ -78,39 +102,65 @@ void setup()
     delay(500);
     Serial.println("[BOOT] Starting...");
 
+    migrateLegacyFmsSettings();
     roleManager.begin();            // Load role before anything that needs it
-    ledAnim.begin();
+    isFmsTable = roleManager.getRole() == ROLE_FMS_TABLE;
+    isAlliance = isAllianceRole(roleManager.getRole());
+    isStopController = isStopRole(roleManager.getRole());
+    ws.loadPreferences();
+    if (isFmsTable) fmsTable.begin(ws.arenaHost, ws.arenaPort, network);
+    if (isAlliance) allianceStops.begin(roleManager.getRole());
 
     const RoleConfig& role = roleManager.getConfig();
 
-    counters.begin();
-    for (uint8_t i = 0; i < 4; i++) {
-        counters.addChannel(i, role.counterPin[i]);
+    if (!isStopController) {
+        counters.begin();
+        for (uint8_t i = 0; i < 4; i++) {
+            counters.addChannel(i, role.counterPin[i]);
+        }
+        counters.startTask();                   //must be called after all channels added
+
+        relays.begin();
+        relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
+        relays.addChannel(1, role.relayLight); // Vertical hub motor relay
     }
-    counters.startTask();                   //must be called after all channels added
 
-    relays.begin();
-    relays.addChannel(0, role.relayMotor); // Horizontal hub motor relay
-    relays.addChannel(1, role.relayLight); // Vertical hub motor relay
+    leds.begin(isStopController);
+    ledAnimator.begin();
 
-    leds.begin();
-
-    network.begin();
-    web.begin();                    // Start webserver after network is ready
+    network.begin(isStopController);
+    web.setInputStatusProvider(readInputStatus);
+    web.begin();                    // Also starts while waiting for Ethernet IP
 
      // Start WebSocket — prefs loaded inside begin()
     ws.onCoilUpdate(onCoilUpdate);
-    ws.onLedMode(onLedModeUpdate);
+    ws.onSetLedMode(onSetLedMode);
+    ws.configureStopRole(roleManager.getRole());
     ws.begin("", 0);                // Empty = use stored prefs
 
-    dmxLed.begin();
+    if (!isStopController) dmxLed.begin();
 }
 
 void loop()
 {
     network.update();
+    ws.setLedModeEnabled(!isStopController && network.ledControlMode == LED_CONTROL_WEBSOCKET);
     ws.update();                    // Must be called every loop
+    if (isFmsTable) fmsTable.serviceStops(ws);
+    if (isAlliance) allianceStops.serviceStops(ws, network.isConnected());
     web.update();               // Handles pending reboot
+
+    if (isAlliance) {
+        allianceStops.update(leds, ws.messageCount());
+        delay(1);
+        return;
+    }
+
+    if (isFmsTable) {
+        fmsTable.update(leds, ws.messageCount());
+        delay(1); // Yield to RTOS; stop sampling has its own higher-priority task.
+        return;   // No hub relay, counter, DMX, or 500 ms input telemetry on table pins.
+    }
 
     LedControlMode ledMode = network.ledControlMode;
 
@@ -118,9 +168,9 @@ void loop()
     if (ledMode == LED_CONTROL_DMX) {
         dmxLed.update();
     }
-    // WebSocket LED mode — run animator
+    // WebSocket mode animations are selected by setLedMode and rendered locally.
     if (ledMode == LED_CONTROL_WEBSOCKET) {
-        ledAnim.update();
+        ledAnimator.update();
     }
 
     // Coil mode — handled in onCoilUpdate
@@ -154,9 +204,9 @@ void loop()
     }
   
 
-    // Print count every 2 seconds
+    // Keep the status summary every 5 seconds, even with debug disabled.
     static uint32_t lastPrint = 0;
-    if (millis() - lastPrint >= 2000) {
+    if (millis() - lastPrint >= 5000) {
         lastPrint = millis();
         Serial.printf("[STATUS] Role:%s  Ch0:%lld Ch1:%lld Ch2:%lld Ch3:%lld | Relay:%s | WS:%s\n",
                       roleManager.getRoleName().c_str(),

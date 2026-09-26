@@ -1,5 +1,7 @@
 #include "dmx_led_manager.h"
 
+extern bool _debugSerial;
+
 DmxLedManager::DmxLedManager(LedManager& leds, RoleManager& role)
     : _leds(leds), _role(role) {}
 
@@ -32,6 +34,8 @@ void DmxLedManager::update() {
             if (_validatePacket(temp, size, SACN_UNIVERSE_RED, _lastSeqRed)) {
                 memcpy(_packetRed, temp, size);
                 _srcPixelsRed = (size - SACN_PIXEL_DATA_OFFSET) / 3;
+                if (_debugSerial) Serial.printf("[DMX] Received universe=%d seq=%u bytes=%d pixels=%d\n",
+                              universe, (unsigned)temp[111], size, _srcPixelsRed);
                 _lastPacket   = millis();
                 _receiving    = true;
                 _renderPixels();
@@ -40,6 +44,8 @@ void DmxLedManager::update() {
             if (_validatePacket(temp, size, SACN_UNIVERSE_BLUE, _lastSeqBlue)) {
                 memcpy(_packetBlue, temp, size);
                 _srcPixelsBlue = (size - SACN_PIXEL_DATA_OFFSET) / 3;
+                if (_debugSerial) Serial.printf("[DMX] Received universe=%d seq=%u bytes=%d pixels=%d\n",
+                              universe, (unsigned)temp[111], size, _srcPixelsBlue);
                 _lastPacket    = millis();
                 _receiving     = true;
                 _renderPixels();
